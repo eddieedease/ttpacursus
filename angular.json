@@ -38,7 +38,8 @@
                 {
                   "glob": "**/*",
                   "input": "api",
-                  "output": "api"
+                  "output": "api",
+                  "ignore": ["config.local.php"]
                 }
               ],
               "budgets": [

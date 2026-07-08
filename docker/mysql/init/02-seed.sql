@@ -1,6 +1,8 @@
 -- Development seed data. Do NOT import on the shared host.
 
-USE ttpacursus;
+-- Dev admin: username 'admin', password 'ttpa2025'
+INSERT INTO admins (username, password_hash) VALUES
+('admin', '$2y$10$OL5231/3ZVxjDkdY82VR1OX43VuheJUIB/kgOs4vb5hUmMbhNfKxe');
 
 INSERT INTO organisations (name, contact_person, contact_email, address, postcode, city, invoice_address, invoice_postcode, invoice_city, invoice_email) VALUES
 ('UMCG', 'Mevr. P. Dijkstra', 'inkoop@umcg.nl', 'Hanzeplein 1', '9713 GZ', 'Groningen', 'Postbus 30001', '9700 RB', 'Groningen', 'facturen@umcg.nl'),

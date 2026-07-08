@@ -4,11 +4,12 @@ import { CourseEvent, Organisation, Registration, RegistrationStatus } from '../
 import { EventsService } from '../../services/events.service';
 import { OrganisationsService } from '../../services/organisations.service';
 import { RegistrationsService } from '../../services/registrations.service';
+import { RegistrationEditComponent } from './registration-edit.component';
 
 @Component({
   selector: 'app-admin-registrations',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe],
+  imports: [DatePipe, RegistrationEditComponent],
   template: `
     <!-- Stats -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -28,6 +29,16 @@ import { RegistrationsService } from '../../services/registrations.service';
 
     <!-- Filters -->
     <div class="flex flex-wrap gap-4 mb-4 items-end">
+      <div>
+        <label for="reg-search" class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Zoeken</label>
+        <input
+          id="reg-search"
+          type="search"
+          class="form-input"
+          placeholder="Naam, e-mail, organisatie…"
+          (input)="onSearch($event)"
+        >
+      </div>
       <div>
         <label for="filter-status" class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Status</label>
         <select id="filter-status" class="form-input" (change)="onStatusFilter($event)">
@@ -111,6 +122,13 @@ import { RegistrationsService } from '../../services/registrations.service';
               @if (openId() === reg.id) {
                 <tr class="border-b border-slate-100 bg-slate-50/60">
                   <td colspan="6" class="px-6 py-5">
+                    @if (editId() === reg.id) {
+                      <app-registration-edit
+                        [registration]="reg"
+                        (saved)="onEdited()"
+                        (cancelled)="editId.set(null)"
+                      />
+                    } @else {
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4 text-sm">
 
                       <div>
@@ -170,7 +188,11 @@ import { RegistrationsService } from '../../services/registrations.service';
                             <option [value]="org.id" [selected]="org.id === reg.organisationId">{{ org.name }}</option>
                           }
                         </select>
-                        <div class="flex gap-2">
+                        <div class="flex flex-wrap gap-2">
+                          <button
+                            class="text-xs font-semibold text-teal-700 border border-teal-300 hover:bg-teal-50 px-3 py-1.5 rounded-lg"
+                            (click)="editId.set(reg.id)"
+                          >Gegevens bewerken</button>
                           @if (reg.status !== 'geannuleerd') {
                             <button
                               class="text-xs font-semibold text-amber-700 border border-amber-300 hover:bg-amber-50 px-3 py-1.5 rounded-lg"
@@ -193,6 +215,7 @@ import { RegistrationsService } from '../../services/registrations.service';
                       </div>
 
                     </div>
+                    }
                   </td>
                 </tr>
               }
@@ -236,17 +259,26 @@ export class AdminRegistrationsComponent {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly openId = signal<number | null>(null);
+  readonly editId = signal<number | null>(null);
   readonly busyId = signal<number | null>(null);
 
   private readonly statusFilter = signal<RegistrationStatus | ''>('');
   private readonly eventFilter = signal<number | null>(null);
+  private readonly search = signal('');
 
   readonly filtered = computed(() => {
     const status = this.statusFilter();
     const eventId = this.eventFilter();
+    const term = this.search().toLowerCase();
     return this.registrations().filter(reg =>
       (status === '' || reg.status === status) &&
-      (eventId === null || reg.assignedEventId === eventId)
+      (eventId === null || reg.assignedEventId === eventId) &&
+      (term === '' ||
+        [
+          this.fullName(reg), reg.voornaam, reg.email, reg.bigNummer,
+          reg.organisationName ?? '', reg.orgAndersNaam ?? '',
+          reg.specialisme, reg.functie, reg.afdeling, reg.woonplaats,
+        ].some(value => value.toLowerCase().includes(term)))
     );
   });
 
@@ -289,6 +321,16 @@ export class AdminRegistrationsComponent {
 
   toggleDetail(id: number): void {
     this.openId.update(open => (open === id ? null : id));
+    this.editId.set(null);
+  }
+
+  onSearch(event: Event): void {
+    this.search.set((event.target as HTMLInputElement).value);
+  }
+
+  async onEdited(): Promise<void> {
+    this.editId.set(null);
+    await this.load();
   }
 
   onStatusFilter(event: Event): void {

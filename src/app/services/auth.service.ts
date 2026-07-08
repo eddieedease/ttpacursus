@@ -20,10 +20,10 @@ export class AuthService {
     }
   }
 
-  async login(password: string): Promise<boolean> {
+  async login(username: string, password: string): Promise<boolean> {
     try {
       await firstValueFrom(
-        this.http.post<{ authenticated: boolean }>('/api/auth.php', { password })
+        this.http.post<{ authenticated: boolean }>('/api/auth.php', { username, password })
       );
       this.authenticated.set(true);
       return true;

@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/lib/http.php';
 require __DIR__ . '/lib/auth.php';
-
-$config = require __DIR__ . '/config.php';
+require __DIR__ . '/db.php';
 
 start_session();
 
@@ -15,15 +14,22 @@ switch ($_SERVER['REQUEST_METHOD']) {
 
     case 'POST':
         $body = read_json();
+        $username = trim((string) ($body['username'] ?? ''));
         $password = (string) ($body['password'] ?? '');
 
-        if ($password !== '' && hash_equals((string) $config['admin_password'], $password)) {
-            session_regenerate_id(true);
-            $_SESSION['is_admin'] = true;
-            json_response(['authenticated' => true]);
+        if ($username !== '' && $password !== '') {
+            $stmt = db()->prepare('SELECT password_hash FROM admins WHERE username = ?');
+            $stmt->execute([$username]);
+            $admin = $stmt->fetch();
+
+            if ($admin && password_verify($password, $admin['password_hash'])) {
+                session_regenerate_id(true);
+                $_SESSION['is_admin'] = true;
+                json_response(['authenticated' => true]);
+            }
         }
 
-        json_error('Onjuist wachtwoord', 401);
+        json_error('Onjuiste inloggegevens', 401);
 
     case 'DELETE':
         $_SESSION = [];

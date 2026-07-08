@@ -38,6 +38,11 @@ export class RegistrationsService {
     return firstValueFrom(this.http.put('/api/registrations.php', { id, status }));
   }
 
+  /** Admin: edit registration fields. */
+  update(id: number, changes: Record<string, unknown>): Promise<unknown> {
+    return firstValueFrom(this.http.put('/api/registrations.php', { id, ...changes }));
+  }
+
   delete(id: number): Promise<unknown> {
     return firstValueFrom(this.http.delete('/api/registrations.php', { params: { id } }));
   }

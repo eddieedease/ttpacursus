@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { CourseEvent } from '../../models';
@@ -88,7 +88,19 @@ import { EventsService } from '../../services/events.service';
       </div>
 
       <!-- List -->
-      <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden self-start">
+      <div class="lg:col-span-2 self-start">
+        <div class="mb-3">
+          <label for="ev-search" class="sr-only">Zoeken in cursusdata</label>
+          <input
+            id="ev-search"
+            type="search"
+            class="form-input max-w-xs"
+            placeholder="Zoeken…"
+            (input)="onSearch($event)"
+          >
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
           <table class="w-full text-sm" aria-label="Cursusdata">
             <thead>
@@ -103,7 +115,7 @@ import { EventsService } from '../../services/events.service';
               </tr>
             </thead>
             <tbody>
-              @for (ev of events(); track ev.id) {
+              @for (ev of filtered(); track ev.id) {
                 <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                   <td class="px-4 py-3 font-medium text-slate-800 capitalize">{{ ev.eventDate | date:'EEE d MMM y' }}</td>
                   <td class="px-4 py-3 text-slate-600">
@@ -135,12 +147,13 @@ import { EventsService } from '../../services/events.service';
               } @empty {
                 <tr>
                   <td colspan="7" class="px-4 py-8 text-center text-slate-500">
-                    @if (loading()) { Cursusdata worden geladen… } @else { Nog geen cursusdata. Voeg de eerste toe. }
+                    @if (loading()) { Cursusdata worden geladen… } @else { Geen cursusdata gevonden. }
                   </td>
                 </tr>
               }
             </tbody>
           </table>
+        </div>
         </div>
       </div>
 
@@ -170,6 +183,19 @@ export class AdminPlannerComponent {
   readonly error = signal<string | null>(null);
   readonly editingId = signal<number | null>(null);
 
+  private readonly search = signal('');
+
+  readonly filtered = computed(() => {
+    const term = this.search().toLowerCase();
+    if (!term) {
+      return this.events();
+    }
+    return this.events().filter(ev =>
+      [ev.eventDate, ev.location ?? '', ev.notes ?? '', ev.status ?? '']
+        .some(value => value.toLowerCase().includes(term))
+    );
+  });
+
   readonly form = this.fb.group({
     eventDate: ['', Validators.required],
     startTime: [''],
@@ -198,6 +224,10 @@ export class AdminPlannerComponent {
   isInvalid(field: string): boolean {
     const ctrl = this.form.get(field);
     return !!(ctrl && ctrl.invalid && (ctrl.dirty || ctrl.touched));
+  }
+
+  onSearch(event: Event): void {
+    this.search.set((event.target as HTMLInputElement).value);
   }
 
   statusClasses(ev: CourseEvent): string {

@@ -42,3 +42,6 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Local environment credentials (written by api/install.php)
+/api/config.local.php

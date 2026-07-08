@@ -19,9 +19,17 @@ import { AuthService } from '../../services/auth.service';
           <div class="max-w-sm mx-auto mt-16">
             <div class="bg-white rounded-2xl shadow-md border border-slate-200 p-8">
               <h1 class="text-xl font-bold text-slate-800 mb-1 text-center">Admin toegang</h1>
-              <p class="text-sm text-slate-500 text-center mb-6">Vul het wachtwoord in om door te gaan.</p>
+              <p class="text-sm text-slate-500 text-center mb-6">Log in met uw beheerdersaccount.</p>
 
               <form [formGroup]="loginForm" (ngSubmit)="tryLogin()" novalidate>
+                <label for="admin-username" class="block text-sm font-medium text-slate-700 mb-1">Gebruikersnaam</label>
+                <input
+                  id="admin-username"
+                  type="text"
+                  formControlName="username"
+                  class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 mb-4"
+                  autocomplete="username"
+                >
                 <label for="admin-password" class="block text-sm font-medium text-slate-700 mb-1">Wachtwoord</label>
                 <input
                   id="admin-password"
@@ -31,7 +39,7 @@ import { AuthService } from '../../services/auth.service';
                   autocomplete="current-password"
                 >
                 @if (loginError()) {
-                  <p class="text-xs text-red-600 mb-3" role="alert">Onjuist wachtwoord. Probeer het opnieuw.</p>
+                  <p class="text-xs text-red-600 mb-3" role="alert">Onjuiste inloggegevens. Probeer het opnieuw.</p>
                 }
                 <button
                   id="admin-login-btn"
@@ -64,6 +72,7 @@ import { AuthService } from '../../services/auth.service';
             <a routerLink="aanmeldingen" routerLinkActive="tab-active" class="tab">Aanmeldingen</a>
             <a routerLink="planner" routerLinkActive="tab-active" class="tab">Cursusdata</a>
             <a routerLink="organisaties" routerLinkActive="tab-active" class="tab">Organisaties</a>
+            <a routerLink="facturen" routerLinkActive="tab-active" class="tab">Facturen</a>
           </nav>
 
           <router-outlet />
@@ -89,6 +98,7 @@ export class AdminComponent {
   readonly loggingIn = signal(false);
 
   readonly loginForm = this.fb.group({
+    username: ['', Validators.required],
     password: ['', Validators.required],
   });
 
@@ -101,9 +111,10 @@ export class AdminComponent {
       return;
     }
     this.loggingIn.set(true);
-    const ok = await this.auth.login(this.loginForm.getRawValue().password!);
+    const { username, password } = this.loginForm.getRawValue();
+    const ok = await this.auth.login(username!, password!);
     this.loginError.set(!ok);
-    this.loginForm.reset({ password: '' });
+    this.loginForm.patchValue({ password: '' });
     this.loggingIn.set(false);
   }
 

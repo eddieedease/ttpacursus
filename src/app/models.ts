@@ -79,6 +79,27 @@ export interface Registration {
   createdAt: string;
 }
 
+export type InvoiceStatus = 'open' | 'verwerkt';
+
+export interface Invoice {
+  id: number;
+  invoiceNumber: string;
+  eventId: number | null;
+  organisationId: number | null;
+  eventDate: string;
+  orgName: string;
+  orgInvoiceAddress: string | null;
+  orgInvoiceEmail: string | null;
+  orgInvoiceReference: string | null;
+  participantCount: number;
+  participants: string[];
+  unitPrice: number;
+  total: number;
+  status: InvoiceStatus;
+  notes: string | null;
+  createdAt: string;
+}
+
 export interface RegistrationSubmission {
   achternaam: string;
   voorvoegsels: string;

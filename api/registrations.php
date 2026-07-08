@@ -211,6 +211,81 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $params[] = $body['status'];
         }
 
+        // Editable form fields. Keys not present in the body stay untouched.
+        $requiredFields = [
+            'achternaam' => 'achternaam',
+            'voorletters' => 'voorletters',
+            'voornaam' => 'voornaam',
+            'titel' => 'titel',
+            'geboorteplaats' => 'geboorteplaats',
+            'telefoonWerk' => 'telefoon_werk',
+            'mobiel' => 'mobiel',
+            'adres' => 'adres',
+            'postcode' => 'postcode',
+            'woonplaats' => 'woonplaats',
+            'bigNummer' => 'big_nummer',
+            'functie' => 'functie',
+            'specialisme' => 'specialisme',
+            'afdeling' => 'afdeling',
+        ];
+        foreach ($requiredFields as $key => $column) {
+            if (!array_key_exists($key, $body)) {
+                continue;
+            }
+            $value = trim((string) $body[$key]);
+            if ($value === '') {
+                json_error("Veld '$key' mag niet leeg zijn");
+            }
+            $set[] = "$column = ?";
+            $params[] = $value;
+        }
+
+        $optionalFields = [
+            'voorvoegsels' => 'voorvoegsels',
+            'mobielExtra' => 'mobiel_extra',
+            'werkervaring' => 'werkervaring',
+            'orgAndersNaam' => 'org_anders_naam',
+            'orgAndersContactpersoon' => 'org_anders_contactpersoon',
+            'orgAndersEmail' => 'org_anders_email',
+            'orgAndersAdres' => 'org_anders_adres',
+            'orgAndersFactuuradres' => 'org_anders_factuuradres',
+            'dieetwensen' => 'dieetwensen',
+            'opmerkingen' => 'opmerkingen',
+        ];
+        foreach ($optionalFields as $key => $column) {
+            if (!array_key_exists($key, $body)) {
+                continue;
+            }
+            $set[] = "$column = ?";
+            $params[] = trim((string) $body[$key]) ?: null;
+        }
+
+        if (array_key_exists('email', $body)) {
+            if (!filter_var((string) $body['email'], FILTER_VALIDATE_EMAIL)) {
+                json_error('Ongeldig e-mailadres');
+            }
+            $set[] = 'email = ?';
+            $params[] = trim((string) $body['email']);
+        }
+        if (array_key_exists('geslacht', $body)) {
+            if (!in_array($body['geslacht'], ['man', 'vrouw'], true)) {
+                json_error('Ongeldig geslacht');
+            }
+            $set[] = 'geslacht = ?';
+            $params[] = $body['geslacht'];
+        }
+        if (array_key_exists('geboortedatum', $body)) {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $body['geboortedatum'])) {
+                json_error('Ongeldige geboortedatum');
+            }
+            $set[] = 'geboortedatum = ?';
+            $params[] = $body['geboortedatum'];
+        }
+        if (array_key_exists('inOpleiding', $body)) {
+            $set[] = 'in_opleiding = ?';
+            $params[] = $body['inOpleiding'] === 'ja' || $body['inOpleiding'] === true ? 1 : 0;
+        }
+
         if ($set === []) {
             json_error('Geen wijzigingen opgegeven');
         }

@@ -1,8 +1,15 @@
 -- TTPA cursus database schema.
 -- Runs automatically on first start of the MySQL container.
--- For the shared host: import this file once via phpMyAdmin.
+-- For the shared host: prefer the web installer (/api/install.php), which
+-- creates the same structure AND the first admin account. This file is the
+-- manual fallback (import via phpMyAdmin into your database).
 
-USE ttpacursus;
+CREATE TABLE IF NOT EXISTS admins (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(80) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS organisations (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -88,3 +95,27 @@ CREATE TABLE IF NOT EXISTS registrations (
 CREATE INDEX idx_reg_status ON registrations (status);
 CREATE INDEX idx_reg_assigned ON registrations (assigned_event_id);
 CREATE INDEX idx_events_date ON events (event_date);
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  invoice_number VARCHAR(30) NOT NULL UNIQUE,
+  event_id INT UNSIGNED NULL,
+  organisation_id INT UNSIGNED NULL,
+  -- Snapshot at creation time, so the invoice stays intact if the
+  -- event/organisation is later changed or deleted.
+  event_date DATE NOT NULL,
+  org_name VARCHAR(255) NOT NULL,
+  org_invoice_address TEXT NULL,
+  org_invoice_email VARCHAR(255) NULL,
+  org_invoice_reference VARCHAR(120) NULL,
+  participant_count INT UNSIGNED NOT NULL,
+  participants TEXT NOT NULL,
+  unit_price DECIMAL(8,2) NOT NULL,
+  total DECIMAL(10,2) NOT NULL,
+  status ENUM('open','verwerkt') NOT NULL DEFAULT 'open',
+  notes TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_inv_event FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE SET NULL,
+  CONSTRAINT fk_inv_org FOREIGN KEY (organisation_id) REFERENCES organisations (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

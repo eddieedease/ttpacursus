@@ -29,6 +29,11 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./pages/admin/organisations.component').then(m => m.AdminOrganisationsComponent),
       },
+      {
+        path: 'facturen',
+        loadComponent: () =>
+          import('./pages/admin/invoices.component').then(m => m.AdminInvoicesComponent),
+      },
     ],
   },
   {

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { Organisation } from '../../models';
 import { OrganisationsService } from '../../services/organisations.service';
@@ -129,35 +129,36 @@ import { OrganisationsService } from '../../services/organisations.service';
       </div>
 
       <!-- List -->
-      <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden self-start">
+      <div class="lg:col-span-3 self-start">
+        <div class="mb-3">
+          <label for="org-search" class="sr-only">Zoeken in organisaties</label>
+          <input
+            id="org-search"
+            type="search"
+            class="form-input max-w-xs"
+            placeholder="Zoeken…"
+            (input)="onSearch($event)"
+          >
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
           <table class="w-full text-sm" aria-label="Organisaties">
             <thead>
               <tr class="bg-slate-50 border-b border-slate-200 text-left">
                 <th scope="col" class="px-4 py-3 font-semibold text-slate-600">Naam</th>
-                <th scope="col" class="px-4 py-3 font-semibold text-slate-600">Contactpersoon</th>
-                <th scope="col" class="px-4 py-3 font-semibold text-slate-600">Facturatie</th>
                 <th scope="col" class="px-4 py-3 font-semibold text-slate-600">Aanmeldingen</th>
                 <th scope="col" class="px-4 py-3 font-semibold text-slate-600">Actief</th>
                 <th scope="col" class="px-4 py-3"><span class="sr-only">Acties</span></th>
               </tr>
             </thead>
             <tbody>
-              @for (org of organisations(); track org.id) {
+              @for (org of filtered(); track org.id) {
                 <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors" [class.opacity-50]="!org.isActive">
-                  <td class="px-4 py-3 font-medium text-slate-800">{{ org.name }}</td>
-                  <td class="px-4 py-3 text-slate-600">
-                    {{ org.contactPerson ?? '—' }}
-                    @if (org.contactEmail) {
-                      <span class="block text-xs text-slate-400">{{ org.contactEmail }}</span>
-                    }
-                  </td>
-                  <td class="px-4 py-3 text-slate-600 text-xs">
-                    @if (org.invoiceEmail || org.invoiceAddress) {
-                      @if (org.invoiceEmail) { <span class="block">{{ org.invoiceEmail }}</span> }
-                      @if (org.invoiceAddress) { <span class="block text-slate-400">{{ org.invoiceAddress }}, {{ org.invoicePostcode }} {{ org.invoiceCity }}</span> }
-                    } @else {
-                      <span class="text-amber-600 font-semibold">Ontbreekt</span>
+                  <td class="px-4 py-3 font-medium text-slate-800">
+                    {{ org.name }}
+                    @if (!org.invoiceEmail && !org.invoiceAddress) {
+                      <span class="ml-2 inline-block bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-0.5 rounded-full">facturatie ontbreekt</span>
                     }
                   </td>
                   <td class="px-4 py-3 text-slate-600">{{ org.registrationCount }}</td>
@@ -181,13 +182,14 @@ import { OrganisationsService } from '../../services/organisations.service';
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="6" class="px-4 py-8 text-center text-slate-500">
-                    @if (loading()) { Organisaties worden geladen… } @else { Nog geen organisaties. Voeg de eerste toe. }
+                  <td colspan="4" class="px-4 py-8 text-center text-slate-500">
+                    @if (loading()) { Organisaties worden geladen… } @else { Nog geen organisaties gevonden. }
                   </td>
                 </tr>
               }
             </tbody>
           </table>
+        </div>
         </div>
       </div>
 
@@ -216,6 +218,19 @@ export class AdminOrganisationsComponent {
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
   readonly editingId = signal<number | null>(null);
+
+  private readonly search = signal('');
+
+  readonly filtered = computed(() => {
+    const term = this.search().toLowerCase();
+    if (!term) {
+      return this.organisations();
+    }
+    return this.organisations().filter(org =>
+      [org.name, org.contactPerson ?? '', org.contactEmail ?? '', org.city ?? '', org.invoiceEmail ?? '']
+        .some(value => value.toLowerCase().includes(term))
+    );
+  });
 
   readonly form = this.fb.group({
     name: ['', Validators.required],
@@ -252,6 +267,10 @@ export class AdminOrganisationsComponent {
   isInvalid(field: string): boolean {
     const ctrl = this.form.get(field);
     return !!(ctrl && ctrl.invalid && (ctrl.dirty || ctrl.touched));
+  }
+
+  onSearch(event: Event): void {
+    this.search.set((event.target as HTMLInputElement).value);
   }
 
   startEdit(org: Organisation): void {
