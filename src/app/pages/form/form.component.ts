@@ -1,5 +1,11 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
+import { CourseEvent, OrganisationOption } from '../../models';
+import { EventsService } from '../../services/events.service';
+import { OrganisationsService } from '../../services/organisations.service';
+import { RegistrationsService } from '../../services/registrations.service';
 
 function emailMatchValidator(control: AbstractControl): ValidationErrors | null {
   const email = control.get('email');
@@ -11,10 +17,12 @@ function emailMatchValidator(control: AbstractControl): ValidationErrors | null 
   return null;
 }
 
+const ORG_ANDERS_FIELDS = ['naamOrganisatie', 'contactpersoonOrg', 'emailContactpersoonOrg', 'adresOrganisatie', 'factuuradres'] as const;
+
 @Component({
   selector: 'app-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, DatePipe],
   template: `
     <div class="bg-slate-50 min-h-full py-12 px-4 sm:px-6">
       <div class="max-w-3xl mx-auto">
@@ -37,6 +45,60 @@ function emailMatchValidator(control: AbstractControl): ValidationErrors | null 
         } @else {
 
           <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="space-y-8">
+
+            <!-- Section: Cursusdatum -->
+            <fieldset class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+              <legend class="text-base font-semibold text-slate-800 mb-6 pb-2 border-b border-slate-200 w-full block">
+                Cursusdatum <span class="text-red-500" aria-hidden="true">*</span>
+              </legend>
+
+              @if (eventsLoading()) {
+                <p class="text-sm text-slate-500">Beschikbare data worden geladen…</p>
+              } @else if (events().length === 0) {
+                <p class="text-sm text-slate-600">
+                  Er zijn op dit moment geen cursusdata beschikbaar. Probeer het later opnieuw.
+                </p>
+              } @else {
+                <p class="text-sm text-slate-500 mb-4">
+                  Kies uw voorkeursdatum. Na uw aanmelding nemen wij contact met u op over de definitieve indeling.
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Voorkeursdatum cursus">
+                  @for (ev of events(); track ev.id) {
+                    <label
+                      class="flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition-colors
+                             has-checked:border-teal-500 has-checked:bg-teal-50 border-slate-300 hover:border-teal-400"
+                      [class.opacity-50]="ev.spotsLeft === 0"
+                      [class.cursor-not-allowed]="ev.spotsLeft === 0"
+                    >
+                      <input
+                        type="radio"
+                        formControlName="preferredEventId"
+                        [value]="ev.id"
+                        [attr.disabled]="ev.spotsLeft === 0 ? true : null"
+                        class="accent-teal-600 w-4 h-4 mt-0.5"
+                      >
+                      <span>
+                        <span class="block text-sm font-semibold text-slate-800 capitalize">
+                          {{ ev.eventDate | date:'EEEE d MMMM y' }}
+                        </span>
+                        <span class="block text-xs text-slate-500 mt-0.5">
+                          @if (ev.startTime) { {{ ev.startTime.slice(0, 5) }}@if (ev.endTime) { – {{ ev.endTime.slice(0, 5) }} } uur · }
+                          {{ ev.location }}
+                        </span>
+                        @if (ev.spotsLeft === 0) {
+                          <span class="inline-block mt-1 text-xs font-semibold text-red-600">Vol</span>
+                        } @else if (ev.spotsLeft !== undefined && ev.spotsLeft <= 3) {
+                          <span class="inline-block mt-1 text-xs font-semibold text-amber-600">Nog {{ ev.spotsLeft }} plaatsen</span>
+                        }
+                      </span>
+                    </label>
+                  }
+                </div>
+                @if (isInvalid('preferredEventId')) {
+                  <p class="form-error" role="alert">Kies een cursusdatum.</p>
+                }
+              }
+            </fieldset>
 
             <!-- Section: Persoonlijke gegevens -->
             <fieldset class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
@@ -283,44 +345,65 @@ function emailMatchValidator(control: AbstractControl): ValidationErrors | null 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
 
                 <div class="sm:col-span-2">
-                  <label for="naamOrganisatie" class="form-label">Naam organisatie <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="naamOrganisatie" type="text" formControlName="naamOrganisatie" class="form-input" [class.border-red-400]="isInvalid('naamOrganisatie')">
-                  @if (isInvalid('naamOrganisatie')) {
-                    <p class="form-error" role="alert">Naam organisatie is verplicht.</p>
+                  <label for="organisatieKeuze" class="form-label">Organisatie <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <select
+                    id="organisatieKeuze"
+                    formControlName="organisatieKeuze"
+                    class="form-input"
+                    [class.border-red-400]="isInvalid('organisatieKeuze')"
+                  >
+                    <option value="" disabled>— Kies uw organisatie —</option>
+                    @for (org of organisations(); track org.id) {
+                      <option [value]="org.id">{{ org.name }}</option>
+                    }
+                    <option value="anders">Anders / staat er niet tussen</option>
+                  </select>
+                  @if (isInvalid('organisatieKeuze')) {
+                    <p class="form-error" role="alert">Kies een organisatie.</p>
                   }
                 </div>
 
-                <div>
-                  <label for="contactpersoonOrg" class="form-label">Contactpersoon organisatie <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="contactpersoonOrg" type="text" formControlName="contactpersoonOrg" class="form-input" [class.border-red-400]="isInvalid('contactpersoonOrg')">
-                  @if (isInvalid('contactpersoonOrg')) {
-                    <p class="form-error" role="alert">Contactpersoon is verplicht.</p>
-                  }
-                </div>
+                @if (isOrgAnders()) {
+                  <div class="sm:col-span-2">
+                    <label for="naamOrganisatie" class="form-label">Naam organisatie <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="naamOrganisatie" type="text" formControlName="naamOrganisatie" class="form-input" [class.border-red-400]="isInvalid('naamOrganisatie')">
+                    @if (isInvalid('naamOrganisatie')) {
+                      <p class="form-error" role="alert">Naam organisatie is verplicht.</p>
+                    }
+                  </div>
 
-                <div>
-                  <label for="emailContactpersoonOrg" class="form-label">E-mail contactpersoon <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="emailContactpersoonOrg" type="email" formControlName="emailContactpersoonOrg" class="form-input" [class.border-red-400]="isInvalid('emailContactpersoonOrg')">
-                  @if (isInvalid('emailContactpersoonOrg')) {
-                    <p class="form-error" role="alert">Vul een geldig e-mailadres in.</p>
-                  }
-                </div>
+                  <div>
+                    <label for="contactpersoonOrg" class="form-label">Contactpersoon organisatie <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="contactpersoonOrg" type="text" formControlName="contactpersoonOrg" class="form-input" [class.border-red-400]="isInvalid('contactpersoonOrg')">
+                    @if (isInvalid('contactpersoonOrg')) {
+                      <p class="form-error" role="alert">Contactpersoon is verplicht.</p>
+                    }
+                  </div>
 
-                <div class="sm:col-span-2">
-                  <label for="adresOrganisatie" class="form-label">Adres organisatie <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="adresOrganisatie" type="text" formControlName="adresOrganisatie" class="form-input" [class.border-red-400]="isInvalid('adresOrganisatie')">
-                  @if (isInvalid('adresOrganisatie')) {
-                    <p class="form-error" role="alert">Adres organisatie is verplicht.</p>
-                  }
-                </div>
+                  <div>
+                    <label for="emailContactpersoonOrg" class="form-label">E-mail contactpersoon <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="emailContactpersoonOrg" type="email" formControlName="emailContactpersoonOrg" class="form-input" [class.border-red-400]="isInvalid('emailContactpersoonOrg')">
+                    @if (isInvalid('emailContactpersoonOrg')) {
+                      <p class="form-error" role="alert">Vul een geldig e-mailadres in.</p>
+                    }
+                  </div>
 
-                <div class="sm:col-span-2">
-                  <label for="factuuradres" class="form-label">Factuuradres organisatie <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="factuuradres" type="text" formControlName="factuuradres" class="form-input" [class.border-red-400]="isInvalid('factuuradres')">
-                  @if (isInvalid('factuuradres')) {
-                    <p class="form-error" role="alert">Factuuradres is verplicht.</p>
-                  }
-                </div>
+                  <div class="sm:col-span-2">
+                    <label for="adresOrganisatie" class="form-label">Adres organisatie <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="adresOrganisatie" type="text" formControlName="adresOrganisatie" class="form-input" [class.border-red-400]="isInvalid('adresOrganisatie')">
+                    @if (isInvalid('adresOrganisatie')) {
+                      <p class="form-error" role="alert">Adres organisatie is verplicht.</p>
+                    }
+                  </div>
+
+                  <div class="sm:col-span-2">
+                    <label for="factuuradres" class="form-label">Factuuradres organisatie <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="factuuradres" type="text" formControlName="factuuradres" class="form-input" [class.border-red-400]="isInvalid('factuuradres')">
+                    @if (isInvalid('factuuradres')) {
+                      <p class="form-error" role="alert">Factuuradres is verplicht.</p>
+                    }
+                  </div>
+                }
 
               </div>
             </fieldset>
@@ -345,14 +428,21 @@ function emailMatchValidator(control: AbstractControl): ValidationErrors | null 
               </div>
             </fieldset>
 
+            @if (submitError()) {
+              <div class="bg-red-50 border border-red-300 rounded-xl p-4 text-sm text-red-700" role="alert">
+                {{ submitError() }}
+              </div>
+            }
+
             <!-- Submit -->
             <div class="flex justify-end pb-6">
               <button
                 id="submit-aanmelding"
                 type="submit"
+                [disabled]="submitting()"
                 class="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-10 py-4 rounded-xl shadow-md transition-all duration-200 hover:scale-105"
               >
-                Aanmelding versturen
+                @if (submitting()) { Versturen… } @else { Aanmelding versturen }
               </button>
             </div>
 
@@ -377,11 +467,23 @@ function emailMatchValidator(control: AbstractControl): ValidationErrors | null 
 })
 export class FormComponent {
   private readonly fb = new FormBuilder();
+  private readonly eventsService = inject(EventsService);
+  private readonly organisationsService = inject(OrganisationsService);
+  private readonly registrationsService = inject(RegistrationsService);
 
   readonly submitted = signal(false);
+  readonly submitting = signal(false);
+  readonly submitError = signal<string | null>(null);
+
+  readonly events = signal<CourseEvent[]>([]);
+  readonly eventsLoading = signal(true);
+  readonly organisations = signal<OrganisationOption[]>([]);
+  readonly isOrgAnders = signal(false);
 
   readonly form = this.fb.group(
     {
+      // Cursusdatum
+      preferredEventId: [null as number | null, Validators.required],
       // Persoonlijk
       achternaam: ['', Validators.required],
       voorvoegsels: [''],
@@ -408,12 +510,13 @@ export class FormComponent {
       afdeling: ['', Validators.required],
       inOpleiding: ['', Validators.required],
       werkervaring: [''],
-      // Organisatie
-      naamOrganisatie: ['', Validators.required],
-      contactpersoonOrg: ['', Validators.required],
-      emailContactpersoonOrg: ['', [Validators.required, Validators.email]],
-      adresOrganisatie: ['', Validators.required],
-      factuuradres: ['', Validators.required],
+      // Organisatie: bestaande organisatie of "anders" met vrije invoer
+      organisatieKeuze: ['', Validators.required],
+      naamOrganisatie: [''],
+      contactpersoonOrg: [''],
+      emailContactpersoonOrg: [''],
+      adresOrganisatie: [''],
+      factuuradres: [''],
       // Overig
       dieetwensen: [''],
       opmerkingen: [''],
@@ -421,16 +524,101 @@ export class FormComponent {
     { validators: emailMatchValidator }
   );
 
+  constructor() {
+    this.loadData();
+
+    this.form.get('organisatieKeuze')!.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(value => this.toggleOrgAnders(value === 'anders'));
+  }
+
+  private async loadData(): Promise<void> {
+    try {
+      const [events, organisations] = await Promise.all([
+        this.eventsService.list(),
+        this.organisationsService.listOptions(),
+      ]);
+      this.events.set(events);
+      this.organisations.set(organisations);
+    } catch {
+      this.submitError.set('De cursusgegevens konden niet worden geladen. Probeer het later opnieuw.');
+    } finally {
+      this.eventsLoading.set(false);
+    }
+  }
+
+  private toggleOrgAnders(anders: boolean): void {
+    this.isOrgAnders.set(anders);
+    for (const field of ORG_ANDERS_FIELDS) {
+      const ctrl = this.form.get(field)!;
+      if (anders) {
+        ctrl.setValidators(
+          field === 'emailContactpersoonOrg'
+            ? [Validators.required, Validators.email]
+            : [Validators.required]
+        );
+      } else {
+        ctrl.clearValidators();
+        ctrl.reset('');
+      }
+      ctrl.updateValueAndValidity();
+    }
+  }
+
   isInvalid(field: string): boolean {
     const ctrl = this.form.get(field);
     return !!(ctrl && ctrl.invalid && (ctrl.dirty || ctrl.touched));
   }
 
-  onSubmit(): void {
+  async onSubmit(): Promise<void> {
     this.form.markAllAsTouched();
-    if (this.form.valid) {
-      console.log('Aanmelding:', this.form.value);
+    if (this.form.invalid || this.submitting()) {
+      return;
+    }
+
+    const v = this.form.getRawValue();
+    const anders = v.organisatieKeuze === 'anders';
+
+    this.submitting.set(true);
+    this.submitError.set(null);
+    try {
+      await this.registrationsService.submit({
+        achternaam: v.achternaam!,
+        voorvoegsels: v.voorvoegsels ?? '',
+        voorletters: v.voorletters!,
+        voornaam: v.voornaam!,
+        titel: v.titel!,
+        geslacht: v.geslacht!,
+        geboortedatum: v.geboortedatum!,
+        geboorteplaats: v.geboorteplaats!,
+        email: v.email!,
+        telefoonWerk: v.telefoonWerk!,
+        mobiel: v.mobiel!,
+        mobielExtra: v.telefoonMobielExtra ?? '',
+        adres: v.adresPrive!,
+        postcode: v.postcode!,
+        woonplaats: v.woonplaats!,
+        bigNummer: v.bigNummer!,
+        functie: v.functie!,
+        specialisme: v.specialisme!,
+        afdeling: v.afdeling!,
+        inOpleiding: v.inOpleiding!,
+        werkervaring: v.werkervaring ?? '',
+        organisationId: anders ? null : Number(v.organisatieKeuze),
+        orgAndersNaam: anders ? v.naamOrganisatie! : '',
+        orgAndersContactpersoon: anders ? v.contactpersoonOrg! : '',
+        orgAndersEmail: anders ? v.emailContactpersoonOrg! : '',
+        orgAndersAdres: anders ? v.adresOrganisatie! : '',
+        orgAndersFactuuradres: anders ? v.factuuradres! : '',
+        preferredEventId: v.preferredEventId!,
+        dieetwensen: v.dieetwensen ?? '',
+        opmerkingen: v.opmerkingen ?? '',
+      });
       this.submitted.set(true);
+    } catch {
+      this.submitError.set('Er ging iets mis bij het versturen. Probeer het opnieuw.');
+    } finally {
+      this.submitting.set(false);
     }
   }
 }

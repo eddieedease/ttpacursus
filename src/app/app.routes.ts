@@ -12,6 +12,24 @@ export const routes: Routes = [
   {
     path: 'admin',
     loadComponent: () => import('./pages/admin/admin.component').then(m => m.AdminComponent),
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'aanmeldingen' },
+      {
+        path: 'aanmeldingen',
+        loadComponent: () =>
+          import('./pages/admin/registrations.component').then(m => m.AdminRegistrationsComponent),
+      },
+      {
+        path: 'planner',
+        loadComponent: () =>
+          import('./pages/admin/planner.component').then(m => m.AdminPlannerComponent),
+      },
+      {
+        path: 'organisaties',
+        loadComponent: () =>
+          import('./pages/admin/organisations.component').then(m => m.AdminOrganisationsComponent),
+      },
+    ],
   },
   {
     path: '**',
