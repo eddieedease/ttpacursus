@@ -53,9 +53,17 @@ Fill in:
 
 - the **database credentials** from step 2
 - a **username and password** for the first admin account (this is what you use to log in at `/admin`)
+- optionally the **mail settings** (sender address + SMTP). You can also fill
+  these in later under Beheer → Instellingen. The SMTP details are in your
+  hosting control panel, with the mailbox you want to send from.
 
-The installer creates all tables, creates the admin account, and writes the
-database credentials to `api/config.local.php` on the server.
+The installer creates all tables, creates the admin account, stores the mail
+settings, and writes the database credentials to `api/config.local.php` on the server.
+
+After installing, the site is **under construction**: visitors see a
+"binnenkort online" page and need the preview password (default `goudvis`).
+Turn this off under Beheer → Instellingen when the site goes live. `/admin`
+and `/trainer` always stay reachable.
 
 ### 5. Delete the installer
 
@@ -66,8 +74,11 @@ admin account exists, but removing the file entirely is the safe end state.
 
 - `https://uw-domein.nl/api/health.php` should return
   `{"status":"ok","php":"8.x.x","database":"connected"}`
-- `https://uw-domein.nl/` shows the site; `/aanmelden` shows live course dates
+- `https://uw-domein.nl/` shows the "binnenkort online" page; after entering
+  the preview password the site and `/aanmelden` with live course dates appear
 - `https://uw-domein.nl/admin` — log in with the admin account from step 4
+- Beheer → Instellingen → "Testmail versturen" — check that mail arrives
+  (also check the spam folder; see "Mail deliverability" below)
 
 ## Updating an existing installation
 
@@ -76,17 +87,53 @@ admin account exists, but removing the file entirely is the safe end state.
 
 That's it. Your database credentials are safe: they live in
 `api/config.local.php` on the server, which is never part of a build, so the
-upload cannot overwrite them. Delete `api/install.php` again after uploading
+upload cannot overwrite them. Database changes in a new version are applied
+automatically on the first request after the upload (see `api/lib/schema.php`);
+settings, mail templates and all data are kept. Delete `api/install.php` again after uploading
 (each build ships a fresh copy).
+
+## Users and roles
+
+- **Beheerder (admin)** — full access to `/admin`.
+- **Trainer** — logs in at `/trainer` (link in the footer) and marks per course
+  date whether they are available. The admin assigns trainers per date under
+  Cursusdata, and finds trainers quickly under the Trainers tab.
+
+Accounts are managed under Beheer → Gebruikers.
+
+## E-mail
+
+Two mails are sent, both editable under Beheer → E-mails:
+
+1. **Aanmelding ontvangen** — automatically, when the form is submitted.
+2. **Inschrijving bevestigd** — when the admin clicks "Bevestigen & mailen" on a
+   registration (or "Bevestig alle ingedeelden" on a course date). The
+   registration then gets status *bevestigd*. Moving a confirmed registration
+   to another date sets it back to *ingedeeld*, so it needs a new confirmation.
+
+Every mail is logged (Beheer → E-mails, and per registration in its details).
+An optional BCC address under Instellingen receives a copy of every mail.
+
+**LMS (Inervo):** confirming calls `lms_provision()` in `api/lib/lms.php`
+before the mail is sent. It is a placeholder for now; once implemented, the
+login details it returns are put into the confirmation mail via the
+`{{lms_gegevens}}` placeholder (empty until then).
+
+**Mail deliverability:** send from an address on your own domain, via the SMTP
+server of your host, and make sure SPF/DKIM are enabled for the domain in the
+hosting panel. Otherwise confirmation mails are likely to land in spam.
 
 ## Admin password forgotten?
 
-1. In phpMyAdmin (hosting panel), empty the `admins` table:
-   `DELETE FROM admins;`
+Another admin can set a new password under Beheer → Gebruikers. If there is no
+other admin:
+
+1. In phpMyAdmin (hosting panel), delete the admin accounts:
+   `DELETE FROM users WHERE role = 'admin';`
+   (trainers and all other data stay)
 2. Upload `api/install.php` again (it's in every build)
-3. Run the installer — the database fields can stay as they are; it only needs
-   to create the new admin account. Existing data is untouched (all tables are
-   created with `IF NOT EXISTS`).
+3. Run the installer — it only creates the new admin account; existing data is
+   untouched.
 4. Delete `api/install.php` again
 
 ## Manual fallback (without the installer)
@@ -102,9 +149,10 @@ harmless.
 ## Local development (reference)
 
 ```bash
-docker compose up -d   # PHP API :8080, MySQL :3306, phpMyAdmin :8082
+docker compose up -d   # PHP API :8080, MySQL :3306, phpMyAdmin :8082, Mailpit :8025
 npm start              # Angular dev server :4200, proxies /api to :8080
 ```
 
 - Dev admin: username `admin`, password `ttpa2025`
+- Mail is caught by Mailpit: http://localhost:8025 (nothing leaves your machine)
 - Fresh database (re-runs schema + seed): `docker compose down -v && docker compose up -d`

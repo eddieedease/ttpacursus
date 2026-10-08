@@ -1,5 +1,7 @@
 export type EventStatus = 'open' | 'gesloten' | 'geannuleerd';
-export type RegistrationStatus = 'nieuw' | 'ingedeeld' | 'geannuleerd';
+export type RegistrationStatus = 'nieuw' | 'ingedeeld' | 'bevestigd' | 'geannuleerd';
+export type UserRole = 'admin' | 'trainer';
+export type Availability = 'beschikbaar' | 'misschien' | 'niet';
 
 export interface CourseEvent {
   id: number;
@@ -14,7 +16,100 @@ export interface CourseEvent {
   status?: EventStatus;
   notes?: string | null;
   assignedCount?: number;
+  confirmedCount?: number;
   preferredCount?: number;
+  trainers?: EventTrainer[];
+}
+
+export interface EventTrainer {
+  userId: number;
+  name: string;
+  availability: Availability | null;
+  assigned: boolean;
+}
+
+/** A course date as seen by the logged-in trainer. */
+export interface TrainerEvent {
+  eventId: number;
+  eventDate: string;
+  startTime: string | null;
+  endTime: string | null;
+  location: string | null;
+  eventStatus: string;
+  availability: Availability | null;
+  assigned: boolean;
+}
+
+/** Admin overview of one trainer. */
+export interface TrainerOverview {
+  id: number;
+  username: string;
+  name: string;
+  email: string | null;
+  isActive: boolean;
+  dates: {
+    eventId: number;
+    eventDate: string;
+    location: string | null;
+    availability: Availability | null;
+    assigned: boolean;
+  }[];
+}
+
+export interface User {
+  id: number;
+  username: string;
+  name: string | null;
+  email: string | null;
+  role: UserRole;
+  isActive: boolean;
+  createdAt: string;
+  assignedCount: number;
+}
+
+export interface SiteSettings {
+  constructionEnabled: boolean;
+  constructionPassword: string;
+  mailTransport: 'smtp' | 'mail';
+  smtpHost: string;
+  smtpPort: string;
+  smtpSecure: 'ssl' | 'tls' | 'none';
+  smtpUser: string;
+  smtpPassSet: boolean;
+  mailFromAddress: string;
+  mailFromName: string;
+  mailBcc: string;
+}
+
+export interface MailTemplate {
+  key: string;
+  name: string;
+  description: string;
+  subject: string;
+  body: string;
+  updatedAt: string;
+}
+
+export interface MailPlaceholder {
+  key: string;
+  label: string;
+}
+
+export interface MailLogEntry {
+  id: number;
+  registrationId: number | null;
+  templateKey: string | null;
+  recipient: string;
+  subject: string;
+  status: 'verzonden' | 'mislukt';
+  error: string | null;
+  createdAt: string;
+}
+
+export interface ConfirmResult {
+  id: number;
+  ok: boolean;
+  error: string | null;
 }
 
 export interface OrganisationOption {
@@ -76,6 +171,8 @@ export interface Registration {
   status: RegistrationStatus;
   dieetwensen: string | null;
   opmerkingen: string | null;
+  confirmedAt: string | null;
+  lmsStatus: string | null;
   createdAt: string;
 }
 

@@ -5,8 +5,10 @@ declare(strict_types=1);
 require __DIR__ . '/lib/http.php';
 require __DIR__ . '/lib/auth.php';
 require __DIR__ . '/db.php';
+require __DIR__ . '/lib/site.php';
+require __DIR__ . '/lib/mail.php';
 
-const REGISTRATION_STATUSES = ['nieuw', 'ingedeeld', 'geannuleerd'];
+const REGISTRATION_STATUSES = ['nieuw', 'ingedeeld', 'bevestigd', 'geannuleerd'];
 
 switch ($_SERVER['REQUEST_METHOD']) {
     case 'GET':
@@ -42,6 +44,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
                        r.assigned_event_id AS assignedEventId,
                        ae.event_date AS assignedEventDate,
                        r.status, r.dieetwensen, r.opmerkingen,
+                       r.confirmed_at AS confirmedAt, r.lms_status AS lmsStatus,
                        r.created_at AS createdAt
                 FROM registrations r
                 LEFT JOIN organisations o ON o.id = r.organisation_id
@@ -63,6 +66,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
 
     case 'POST':
         // Public: submit the registration form.
+        require_site_unlocked();
         $body = read_json();
 
         $required = [
@@ -157,7 +161,13 @@ switch ($_SERVER['REQUEST_METHOD']) {
             trim((string) ($body['opmerkingen'] ?? '')) ?: null,
         ]);
 
-        json_response(['id' => (int) db()->lastInsertId()], 201);
+        $id = (int) db()->lastInsertId();
+
+        // Confirmation of receipt. A mail failure must not fail the
+        // registration itself; it is visible in the mail log.
+        send_registration_mail('aanmelding_ontvangen', $id);
+
+        json_response(['id' => $id], 201);
 
     case 'PUT':
         // Admin actions: assign to a date, switch organisation, change status.
@@ -184,6 +194,8 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $set[] = 'assigned_event_id = ?';
             $params[] = $eventId;
             // Assignment drives the status, unless the caller sets one explicitly.
+            // Moving a confirmed registration makes it 'ingedeeld' again: it
+            // needs a new confirmation for the new date.
             if (!array_key_exists('status', $body)) {
                 $set[] = 'status = ?';
                 $params[] = $eventId !== null ? 'ingedeeld' : 'nieuw';

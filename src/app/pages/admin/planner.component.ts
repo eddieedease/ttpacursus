@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { CourseEvent } from '../../models';
+import { CourseEvent, EventTrainer } from '../../models';
 import { EventsService } from '../../services/events.service';
+import { RegistrationsService } from '../../services/registrations.service';
+import { apiError } from '../../shared/api-error';
 
 @Component({
   selector: 'app-admin-planner',
@@ -110,6 +112,7 @@ import { EventsService } from '../../services/events.service';
                 <th scope="col" class="px-4 py-3 font-semibold text-slate-600">Locatie</th>
                 <th scope="col" class="px-4 py-3 font-semibold text-slate-600">Bezetting</th>
                 <th scope="col" class="px-4 py-3 font-semibold text-slate-600">Voorkeuren</th>
+                <th scope="col" class="px-4 py-3 font-semibold text-slate-600">Trainers</th>
                 <th scope="col" class="px-4 py-3 font-semibold text-slate-600">Status</th>
                 <th scope="col" class="px-4 py-3"><span class="sr-only">Acties</span></th>
               </tr>
@@ -128,6 +131,16 @@ import { EventsService } from '../../services/events.service';
                     </span>
                   </td>
                   <td class="px-4 py-3 text-slate-600">{{ ev.preferredCount }}</td>
+                  <td class="px-4 py-3 text-slate-700">
+                    <button
+                      class="text-left text-xs font-semibold text-teal-800 hover:text-teal-950 underline underline-offset-2"
+                      [attr.aria-expanded]="openId() === ev.id"
+                      (click)="toggle(ev.id)"
+                    >
+                      @if (assignedTrainers(ev).length) { {{ assignedTrainers(ev).join(', ') }} } @else { Nog niemand }
+                      <span class="block font-normal text-slate-600 no-underline">{{ availableCount(ev) }} beschikbaar</span>
+                    </button>
+                  </td>
                   <td class="px-4 py-3">
                     <span class="inline-block text-xs font-semibold px-3 py-1 rounded-full" [class]="statusClasses(ev)">
                       {{ ev.status }}
@@ -144,9 +157,54 @@ import { EventsService } from '../../services/events.service';
                     >Verwijderen</button>
                   </td>
                 </tr>
+                @if (openId() === ev.id) {
+                  <tr class="border-b border-slate-100 bg-slate-50/60">
+                    <td colspan="8" class="px-6 py-5">
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <fieldset>
+                          <legend class="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Trainers inplannen</legend>
+                          @for (t of ev.trainers ?? []; track t.userId) {
+                            <label class="flex items-center gap-3 py-1.5 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                class="h-4 w-4 rounded border-slate-400 text-teal-600 focus:ring-teal-500"
+                                [checked]="t.assigned"
+                                [disabled]="busyId() === ev.id"
+                                (change)="toggleTrainer(ev, t)"
+                              >
+                              <span class="text-sm text-slate-800 flex-1">{{ t.name }}</span>
+                              <span class="text-xs font-semibold px-2 py-0.5 rounded-full" [class]="availabilityClasses(t)">
+                                {{ t.availability ?? 'niet opgegeven' }}
+                              </span>
+                            </label>
+                          } @empty {
+                            <p class="text-sm text-slate-600">Er zijn nog geen trainers. Voeg ze toe onder Gebruikers.</p>
+                          }
+                        </fieldset>
+                        <div>
+                          <h3 class="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Deelnemers bevestigen</h3>
+                          <p class="text-sm text-slate-700 mb-3">
+                            {{ ev.confirmedCount }} van {{ ev.assignedCount }} ingedeelde deelnemer(s) bevestigd.
+                          </p>
+                          @if ((ev.assignedCount ?? 0) > (ev.confirmedCount ?? 0)) {
+                            <button
+                              class="text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 px-4 py-2 rounded-lg"
+                              [disabled]="busyId() === ev.id"
+                              (click)="confirmAll(ev)"
+                            >Bevestig alle ingedeelden &amp; mail</button>
+                            <p class="text-xs text-slate-600 mt-2">Iedereen die op deze datum is ingedeeld en nog niet bevestigd is, krijgt de bevestigingsmail.</p>
+                          }
+                          @if (confirmMsg(); as m) {
+                            <p class="mt-3 text-sm" [class]="m.ok ? 'text-teal-800' : 'text-red-700'" role="status">{{ m.text }}</p>
+                          }
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                }
               } @empty {
                 <tr>
-                  <td colspan="7" class="px-4 py-8 text-center text-slate-500">
+                  <td colspan="8" class="px-4 py-8 text-center text-slate-500">
                     @if (loading()) { Cursusdata worden geladen… } @else { Geen cursusdata gevonden. }
                   </td>
                 </tr>
@@ -175,6 +233,7 @@ import { EventsService } from '../../services/events.service';
 })
 export class AdminPlannerComponent {
   private readonly eventsService = inject(EventsService);
+  private readonly registrationsService = inject(RegistrationsService);
   private readonly fb = new FormBuilder();
 
   readonly events = signal<CourseEvent[]>([]);
@@ -182,6 +241,9 @@ export class AdminPlannerComponent {
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
   readonly editingId = signal<number | null>(null);
+  readonly openId = signal<number | null>(null);
+  readonly busyId = signal<number | null>(null);
+  readonly confirmMsg = signal<{ ok: boolean; text: string } | null>(null);
 
   private readonly search = signal('');
 
@@ -235,6 +297,65 @@ export class AdminPlannerComponent {
       case 'open': return 'bg-teal-100 text-teal-800';
       case 'geannuleerd': return 'bg-red-100 text-red-700';
       default: return 'bg-slate-200 text-slate-700';
+    }
+  }
+
+  toggle(id: number): void {
+    this.openId.update(open => (open === id ? null : id));
+    this.confirmMsg.set(null);
+  }
+
+  assignedTrainers(ev: CourseEvent): string[] {
+    return (ev.trainers ?? []).filter(t => t.assigned).map(t => t.name);
+  }
+
+  availableCount(ev: CourseEvent): number {
+    return (ev.trainers ?? []).filter(t => t.availability === 'beschikbaar').length;
+  }
+
+  availabilityClasses(t: EventTrainer): string {
+    switch (t.availability) {
+      case 'beschikbaar': return 'bg-teal-100 text-teal-800';
+      case 'misschien': return 'bg-amber-100 text-amber-900';
+      case 'niet': return 'bg-red-100 text-red-800';
+      default: return 'bg-slate-200 text-slate-700';
+    }
+  }
+
+  async toggleTrainer(ev: CourseEvent, trainer: EventTrainer): Promise<void> {
+    const ids = (ev.trainers ?? [])
+      .filter(t => (t.userId === trainer.userId ? !t.assigned : t.assigned))
+      .map(t => t.userId);
+    this.busyId.set(ev.id);
+    try {
+      await this.eventsService.setTrainers(ev.id, ids);
+      await this.load();
+    } catch {
+      this.error.set('De trainers konden niet worden opgeslagen.');
+    } finally {
+      this.busyId.set(null);
+    }
+  }
+
+  async confirmAll(ev: CourseEvent): Promise<void> {
+    const open = (ev.assignedCount ?? 0) - (ev.confirmedCount ?? 0);
+    if (!confirm(`${open} deelnemer(s) bevestigen en de bevestigingsmail versturen?`)) {
+      return;
+    }
+    this.busyId.set(ev.id);
+    try {
+      const results = await this.registrationsService.confirmEvent(ev.id);
+      const failed = results.filter(r => !r.ok);
+      this.confirmMsg.set(
+        failed.length
+          ? { ok: false, text: `${results.length - failed.length} bevestigd, ${failed.length} mislukt: ${failed[0].error}` }
+          : { ok: true, text: `${results.length} deelnemer(s) bevestigd en gemaild.` }
+      );
+      await this.load();
+    } catch (e) {
+      this.confirmMsg.set({ ok: false, text: apiError(e, 'Bevestigen is mislukt.') });
+    } finally {
+      this.busyId.set(null);
     }
   }
 

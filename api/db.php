@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/lib/schema.php';
+
 function db(): PDO
 {
     static $pdo = null;
@@ -20,6 +22,9 @@ function db(): PDO
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
+
+        // Upgrade the schema after a new build has been uploaded.
+        migrate($pdo);
     }
 
     return $pdo;

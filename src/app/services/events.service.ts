@@ -19,6 +19,10 @@ export class EventsService {
     return firstValueFrom(this.http.put('/api/events.php', { id, ...changes }));
   }
 
+  setTrainers(id: number, trainerIds: number[]): Promise<unknown> {
+    return firstValueFrom(this.http.put('/api/events.php', { id, trainerIds }));
+  }
+
   delete(id: number): Promise<unknown> {
     return firstValueFrom(this.http.delete('/api/events.php', { params: { id } }));
   }

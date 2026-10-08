@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
+import { SiteService } from '../../services/site.service';
 
 @Component({
   selector: 'app-nav',
@@ -15,6 +16,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
           <span class="text-slate-700 font-semibold text-base">Cursus</span>
         </a>
 
+        @if (site.unlocked()) {
         <!-- Desktop nav -->
         <ul class="hidden sm:flex items-center gap-6 list-none m-0 p-0">
           <li>
@@ -50,10 +52,11 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
             </svg>
           }
         </button>
+        }
       </nav>
 
       <!-- Mobile menu -->
-      @if (mobileOpen()) {
+      @if (mobileOpen() && site.unlocked()) {
         <div id="mobile-menu" class="sm:hidden border-t border-slate-200 bg-white px-4 py-3 flex flex-col gap-3">
           <a routerLink="/" (click)="mobileOpen.set(false)"
              class="text-slate-700 font-medium py-2 hover:text-teal-600 transition-colors">
@@ -69,5 +72,10 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
   `,
 })
 export class NavComponent {
+  protected readonly site = inject(SiteService);
   readonly mobileOpen = signal(false);
+
+  constructor() {
+    this.site.load();
+  }
 }

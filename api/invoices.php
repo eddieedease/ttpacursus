@@ -73,7 +73,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
         $stmt = db()->prepare(
             "SELECT titel, voorletters, voorvoegsels, achternaam
              FROM registrations
-             WHERE assigned_event_id = ? AND organisation_id = ? AND status = 'ingedeeld'
+             WHERE assigned_event_id = ? AND organisation_id = ? AND status IN ('ingedeeld', 'bevestigd')
              ORDER BY achternaam"
         );
         $stmt->execute([$eventId, $organisationId]);

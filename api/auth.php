@@ -10,7 +10,8 @@ start_session();
 
 switch ($_SERVER['REQUEST_METHOD']) {
     case 'GET':
-        json_response(['authenticated' => is_admin()]);
+        $user = current_user();
+        json_response(['authenticated' => $user !== null, 'role' => $user['role'] ?? null, 'name' => $user['name'] ?? null]);
 
     case 'POST':
         $body = read_json();
@@ -18,14 +19,16 @@ switch ($_SERVER['REQUEST_METHOD']) {
         $password = (string) ($body['password'] ?? '');
 
         if ($username !== '' && $password !== '') {
-            $stmt = db()->prepare('SELECT password_hash FROM admins WHERE username = ?');
+            $stmt = db()->prepare('SELECT id, username, name, role, password_hash FROM users WHERE username = ? AND is_active = 1');
             $stmt->execute([$username]);
-            $admin = $stmt->fetch();
+            $user = $stmt->fetch();
 
-            if ($admin && password_verify($password, $admin['password_hash'])) {
+            if ($user && password_verify($password, $user['password_hash'])) {
                 session_regenerate_id(true);
-                $_SESSION['is_admin'] = true;
-                json_response(['authenticated' => true]);
+                $_SESSION['user_id'] = (int) $user['id'];
+                $_SESSION['role'] = $user['role'];
+                $_SESSION['name'] = $user['name'] ?: $user['username'];
+                json_response(['authenticated' => true, 'role' => $user['role'], 'name' => $_SESSION['name']]);
             }
         }
 
@@ -34,7 +37,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
     case 'DELETE':
         $_SESSION = [];
         session_destroy();
-        json_response(['authenticated' => false]);
+        json_response(['authenticated' => false, 'role' => null, 'name' => null]);
 
     default:
         json_error('Methode niet toegestaan', 405);

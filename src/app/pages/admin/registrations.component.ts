@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { CourseEvent, Organisation, Registration, RegistrationStatus } from '../../models';
+import { CourseEvent, MailLogEntry, Organisation, Registration, RegistrationStatus } from '../../models';
 import { EventsService } from '../../services/events.service';
+import { MailService } from '../../services/mail.service';
 import { OrganisationsService } from '../../services/organisations.service';
 import { RegistrationsService } from '../../services/registrations.service';
 import { RegistrationEditComponent } from './registration-edit.component';
+import { apiError } from '../../shared/api-error';
 
 @Component({
   selector: 'app-admin-registrations',
@@ -12,7 +14,7 @@ import { RegistrationEditComponent } from './registration-edit.component';
   imports: [DatePipe, RegistrationEditComponent],
   template: `
     <!-- Stats -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
         <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Totaal aanmeldingen</p>
         <p class="text-3xl font-bold text-slate-900">{{ registrations().length }}</p>
@@ -22,8 +24,12 @@ import { RegistrationEditComponent } from './registration-edit.component';
         <p class="text-3xl font-bold text-amber-600">{{ newCount() }}</p>
       </div>
       <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-        <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Ingedeeld</p>
-        <p class="text-3xl font-bold text-teal-600">{{ assignedCount() }}</p>
+        <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Ingedeeld, nog te bevestigen</p>
+        <p class="text-3xl font-bold text-sky-700">{{ assignedCount() }}</p>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Bevestigd</p>
+        <p class="text-3xl font-bold text-teal-700">{{ confirmedCount() }}</p>
       </div>
     </div>
 
@@ -45,6 +51,7 @@ import { RegistrationEditComponent } from './registration-edit.component';
           <option value="">Alle</option>
           <option value="nieuw">Nieuw</option>
           <option value="ingedeeld">Ingedeeld</option>
+          <option value="bevestigd">Bevestigd</option>
           <option value="geannuleerd">Geannuleerd</option>
         </select>
       </div>
@@ -58,7 +65,10 @@ import { RegistrationEditComponent } from './registration-edit.component';
         </select>
       </div>
       @if (error()) {
-        <p class="text-sm text-red-600" role="alert">{{ error() }}</p>
+        <p class="text-sm text-red-700" role="alert">{{ error() }}</p>
+      }
+      @if (notice()) {
+        <p class="text-sm text-teal-800" role="status">{{ notice() }}</p>
       }
     </div>
 
@@ -172,6 +182,24 @@ import { RegistrationEditComponent } from './registration-edit.component';
                         @if (reg.dieetwensen) { <p><span class="detail-label">Dieet:</span> {{ reg.dieetwensen }}</p> }
                         @if (reg.opmerkingen) { <p><span class="detail-label">Opmerkingen:</span> {{ reg.opmerkingen }}</p> }
                         <p><span class="detail-label">Aangemeld:</span> {{ reg.createdAt | date:'d MMM y, HH:mm' }}</p>
+                        @if (reg.confirmedAt) {
+                          <p><span class="detail-label">Bevestigd:</span> {{ reg.confirmedAt | date:'d MMM y, HH:mm' }}</p>
+                        }
+                      </div>
+
+                      <div>
+                        <h3 class="detail-heading">E-mails</h3>
+                        @for (m of mailLog(); track m.id) {
+                          <p class="text-xs mb-1">
+                            <span class="text-slate-600">{{ m.createdAt | date:'d MMM, HH:mm' }}</span>
+                            {{ templateName(m.templateKey) }}
+                            @if (m.status === 'mislukt') {
+                              <span class="text-red-700 font-semibold">— mislukt: {{ m.error }}</span>
+                            }
+                          </p>
+                        } @empty {
+                          <p class="text-xs text-slate-600">Nog geen e-mails verstuurd.</p>
+                        }
                       </div>
 
                       <div>
@@ -188,6 +216,15 @@ import { RegistrationEditComponent } from './registration-edit.component';
                             <option [value]="org.id" [selected]="org.id === reg.organisationId">{{ org.name }}</option>
                           }
                         </select>
+                        @if (reg.assignedEventId && reg.status !== 'geannuleerd') {
+                          <button
+                            class="w-full mb-3 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 px-3 py-2 rounded-lg"
+                            [disabled]="busyId() === reg.id"
+                            (click)="confirmRegistration(reg)"
+                          >
+                            @if (reg.status === 'bevestigd') { Bevestiging opnieuw versturen } @else { Bevestigen &amp; mailen }
+                          </button>
+                        }
                         <div class="flex flex-wrap gap-2">
                           <button
                             class="text-xs font-semibold text-teal-700 border border-teal-300 hover:bg-teal-50 px-3 py-1.5 rounded-lg"
@@ -252,6 +289,7 @@ export class AdminRegistrationsComponent {
   private readonly registrationsService = inject(RegistrationsService);
   private readonly eventsService = inject(EventsService);
   private readonly organisationsService = inject(OrganisationsService);
+  private readonly mailService = inject(MailService);
 
   readonly registrations = signal<Registration[]>([]);
   readonly events = signal<CourseEvent[]>([]);
@@ -261,6 +299,8 @@ export class AdminRegistrationsComponent {
   readonly openId = signal<number | null>(null);
   readonly editId = signal<number | null>(null);
   readonly busyId = signal<number | null>(null);
+  readonly notice = signal<string | null>(null);
+  readonly mailLog = signal<MailLogEntry[]>([]);
 
   private readonly statusFilter = signal<RegistrationStatus | ''>('');
   private readonly eventFilter = signal<number | null>(null);
@@ -284,6 +324,7 @@ export class AdminRegistrationsComponent {
 
   readonly newCount = computed(() => this.registrations().filter(r => r.status === 'nieuw').length);
   readonly assignedCount = computed(() => this.registrations().filter(r => r.status === 'ingedeeld').length);
+  readonly confirmedCount = computed(() => this.registrations().filter(r => r.status === 'bevestigd').length);
 
   constructor() {
     this.load();
@@ -313,7 +354,8 @@ export class AdminRegistrationsComponent {
 
   statusClasses(status: RegistrationStatus): string {
     switch (status) {
-      case 'ingedeeld': return 'bg-teal-100 text-teal-800';
+      case 'ingedeeld': return 'bg-sky-100 text-sky-800';
+      case 'bevestigd': return 'bg-teal-100 text-teal-800';
       case 'geannuleerd': return 'bg-red-100 text-red-700';
       default: return 'bg-amber-100 text-amber-800';
     }
@@ -322,6 +364,56 @@ export class AdminRegistrationsComponent {
   toggleDetail(id: number): void {
     this.openId.update(open => (open === id ? null : id));
     this.editId.set(null);
+    this.mailLog.set([]);
+    if (this.openId() === id) {
+      this.loadMailLog(id);
+    }
+  }
+
+  private async loadMailLog(id: number): Promise<void> {
+    try {
+      const log = await this.mailService.log(id);
+      if (this.openId() === id) {
+        this.mailLog.set(log);
+      }
+    } catch {
+      // Not critical: the details stay usable without the mail history.
+    }
+  }
+
+  templateName(key: string | null): string {
+    switch (key) {
+      case 'aanmelding_ontvangen': return 'Aanmelding ontvangen';
+      case 'inschrijving_bevestigd': return 'Bevestiging';
+      default: return key ?? 'E-mail';
+    }
+  }
+
+  async confirmRegistration(reg: Registration): Promise<void> {
+    const again = reg.status === 'bevestigd';
+    const question = again
+      ? `De bevestigingsmail opnieuw versturen naar ${reg.email}?`
+      : `Aanmelding van ${this.fullName(reg)} bevestigen? Er wordt een bevestigingsmail verstuurd naar ${reg.email}.`;
+    if (!confirm(question)) {
+      return;
+    }
+    this.busyId.set(reg.id);
+    this.notice.set(null);
+    try {
+      const [result] = await this.registrationsService.confirm([reg.id]);
+      if (result?.ok) {
+        this.notice.set(`${this.fullName(reg)} is bevestigd en gemaild.`);
+        this.error.set(null);
+      } else {
+        this.error.set(result?.error ?? 'Bevestigen is mislukt.');
+      }
+      await this.load();
+      await this.loadMailLog(reg.id);
+    } catch (e) {
+      this.error.set(apiError(e, 'Bevestigen is mislukt.'));
+    } finally {
+      this.busyId.set(null);
+    }
   }
 
   onSearch(event: Event): void {
@@ -343,7 +435,15 @@ export class AdminRegistrationsComponent {
   }
 
   async assign(reg: Registration, event: Event): Promise<void> {
-    const value = (event.target as HTMLSelectElement).value;
+    const select = event.target as HTMLSelectElement;
+    const value = select.value;
+    if (
+      reg.status === 'bevestigd' &&
+      !confirm(`${this.fullName(reg)} is al bevestigd voor de huidige datum. Na het verplaatsen moet u opnieuw bevestigen. Doorgaan?`)
+    ) {
+      select.value = reg.assignedEventId === null ? '' : String(reg.assignedEventId);
+      return;
+    }
     await this.mutate(reg.id, () =>
       this.registrationsService.assignEvent(reg.id, value === '' ? null : Number(value))
     );

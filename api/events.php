@@ -5,6 +5,7 @@ declare(strict_types=1);
 require __DIR__ . '/lib/http.php';
 require __DIR__ . '/lib/auth.php';
 require __DIR__ . '/db.php';
+require __DIR__ . '/lib/site.php';
 
 const EVENT_STATUSES = ['open', 'gesloten', 'geannuleerd'];
 
@@ -21,11 +22,39 @@ switch ($_SERVER['REQUEST_METHOD']) {
                         e.status,
                         e.notes,
                         (SELECT COUNT(*) FROM registrations r WHERE r.assigned_event_id = e.id) AS assignedCount,
+                        (SELECT COUNT(*) FROM registrations r WHERE r.assigned_event_id = e.id AND r.status = 'bevestigd') AS confirmedCount,
                         (SELECT COUNT(*) FROM registrations r WHERE r.preferred_event_id = e.id AND r.status <> 'geannuleerd') AS preferredCount
                  FROM events e
                  ORDER BY e.event_date"
             )->fetchAll();
+
+            // Per date: every active trainer with their availability and whether they are assigned.
+            $trainers = db()->query(
+                "SELECT e.id AS eventId, u.id AS userId, COALESCE(u.name, u.username) AS name,
+                        a.status AS availability,
+                        (et.user_id IS NOT NULL) AS assigned
+                 FROM events e
+                 CROSS JOIN users u
+                 LEFT JOIN trainer_availability a ON a.event_id = e.id AND a.user_id = u.id
+                 LEFT JOIN event_trainers et ON et.event_id = e.id AND et.user_id = u.id
+                 WHERE u.role = 'trainer' AND (u.is_active = 1 OR et.user_id IS NOT NULL)
+                 ORDER BY name"
+            )->fetchAll();
+            $byEvent = [];
+            foreach ($trainers as $t) {
+                $byEvent[$t['eventId']][] = [
+                    'userId' => (int) $t['userId'],
+                    'name' => $t['name'],
+                    'availability' => $t['availability'],
+                    'assigned' => (bool) $t['assigned'],
+                ];
+            }
+            foreach ($rows as &$row) {
+                $row['trainers'] = $byEvent[$row['id']] ?? [];
+            }
+            unset($row);
         } else {
+            require_site_unlocked();
             // Public: only open, future dates, with remaining spots.
             $rows = db()->query(
                 "SELECT e.id,
@@ -114,13 +143,34 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $params[] = $value;
         }
 
-        if ($set === []) {
+        // Assigned trainers: replaces the whole set.
+        $trainerIds = null;
+        if (array_key_exists('trainerIds', $body)) {
+            $trainerIds = array_values(array_unique(array_map('intval', (array) $body['trainerIds'])));
+        }
+
+        if ($set === [] && $trainerIds === null) {
             json_error('Geen wijzigingen opgegeven');
         }
 
-        $params[] = $id;
-        $stmt = db()->prepare('UPDATE events SET ' . implode(', ', $set) . ' WHERE id = ?');
-        $stmt->execute($params);
+        $pdo = db();
+        $pdo->beginTransaction();
+        if ($set !== []) {
+            $params[] = $id;
+            $stmt = $pdo->prepare('UPDATE events SET ' . implode(', ', $set) . ' WHERE id = ?');
+            $stmt->execute($params);
+        }
+        if ($trainerIds !== null) {
+            $pdo->prepare('DELETE FROM event_trainers WHERE event_id = ?')->execute([$id]);
+            $insert = $pdo->prepare(
+                "INSERT INTO event_trainers (event_id, user_id)
+                 SELECT ?, id FROM users WHERE id = ? AND role = 'trainer'"
+            );
+            foreach ($trainerIds as $trainerId) {
+                $insert->execute([$id, $trainerId]);
+            }
+        }
+        $pdo->commit();
 
         json_response(['updated' => true]);
 

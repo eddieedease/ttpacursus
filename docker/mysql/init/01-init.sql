@@ -1,4 +1,7 @@
--- TTPA cursus database schema.
+-- TTPA cursus database schema — BASE version (schema version 1).
+-- Later changes (users/roles, trainers, mail, settings) are applied
+-- automatically by the PHP API on the first request (api/lib/schema.php),
+-- so this file intentionally stays at version 1.
 -- Runs automatically on first start of the MySQL container.
 -- For the shared host: prefer the web installer (/api/install.php), which
 -- creates the same structure AND the first admin account. This file is the

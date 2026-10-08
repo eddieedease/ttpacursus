@@ -1,59 +1,45 @@
-# Ttpacursus
+# TTPA cursus
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.2.
+Website voor de inschrijving van medisch specialisten op de TTPA cursus
+(Tips, Tricks and Pitfall Avoidance).
 
-## Development server
+- **Frontend:** Angular 21 (zoneless, signals) + Tailwind 4
+- **Backend:** plain PHP 8 + MySQL in `api/` — geen framework, geen composer, draait op shared hosting
+- **Deploy:** één build (`npm run build`) → upload `dist/ttpacursus/browser/` via FTP → web-installer.
+  Zie [DEPLOY.md](DEPLOY.md).
 
-To start a local development server, run:
+## Functionaliteit
 
-```bash
-ng serve
-```
+| Onderdeel | Waar |
+|---|---|
+| Landingspagina en aanmeldformulier | `/`, `/aanmelden` |
+| "Binnenkort online"-pagina met preview-wachtwoord (site in aanbouw) | `/binnenkort` |
+| Trainers geven hun beschikbaarheid per cursusdatum door | `/trainer` |
+| Beheer: aanmeldingen indelen en bevestigen, cursusdata en trainers inplannen, organisaties, facturen, trainers, gebruikers, e-mailsjablonen, instellingen | `/admin` |
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+E-mails: automatisch bij een nieuwe aanmelding, en bij het bevestigen van een
+aanmelding door de beheerder. Teksten zijn aan te passen in het beheer.
+De koppeling met het LMS (Inervo) krijgt een plek in `api/lib/lms.php`.
 
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
+## Lokaal ontwikkelen
 
 ```bash
-ng build
+docker compose up -d   # PHP API :8080, MySQL :3306, phpMyAdmin :8082, Mailpit :8025
+npm start              # Angular dev server :4200, proxyt /api naar :8080
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+- Dev-beheerder: `admin` / `ttpa2025`
+- Preview-wachtwoord (site in aanbouw): `goudvis`
+- Alle mail wordt lokaal opgevangen door Mailpit: http://localhost:8025
+- Schone database: `docker compose down -v && docker compose up -d`
 
-## Running unit tests
+Databasewijzigingen gaan via migraties in `api/lib/schema.php`; die worden
+automatisch uitgevoerd bij het eerste API-verzoek na een update.
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+## Bouwen
 
 ```bash
-ng test
+npm run build
 ```
 
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+De uploadbare site staat daarna in `dist/ttpacursus/browser/` (inclusief `api/` en `.htaccess`).

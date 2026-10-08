@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { Registration, RegistrationStatus, RegistrationSubmission } from '../models';
+import { ConfirmResult, Registration, RegistrationStatus, RegistrationSubmission } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class RegistrationsService {
@@ -41,6 +41,22 @@ export class RegistrationsService {
   /** Admin: edit registration fields. */
   update(id: number, changes: Record<string, unknown>): Promise<unknown> {
     return firstValueFrom(this.http.put('/api/registrations.php', { id, ...changes }));
+  }
+
+  /** Admin: confirm (LMS + confirmation mail). Re-sends the mail for confirmed ones. */
+  async confirm(registrationIds: number[]): Promise<ConfirmResult[]> {
+    const res = await firstValueFrom(
+      this.http.post<{ results: ConfirmResult[] }>('/api/confirm.php', { registrationIds })
+    );
+    return res.results;
+  }
+
+  /** Admin: confirm everyone assigned to a date who is not yet confirmed. */
+  async confirmEvent(eventId: number): Promise<ConfirmResult[]> {
+    const res = await firstValueFrom(
+      this.http.post<{ results: ConfirmResult[] }>('/api/confirm.php', { eventId })
+    );
+    return res.results;
   }
 
   delete(id: number): Promise<unknown> {

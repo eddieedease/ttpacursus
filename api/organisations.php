@@ -5,6 +5,7 @@ declare(strict_types=1);
 require __DIR__ . '/lib/http.php';
 require __DIR__ . '/lib/auth.php';
 require __DIR__ . '/db.php';
+require __DIR__ . '/lib/site.php';
 
 switch ($_SERVER['REQUEST_METHOD']) {
     case 'GET':
@@ -36,6 +37,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
         }
 
         // Public: only active organisations, name and id only (for the form dropdown).
+        require_site_unlocked();
         $rows = db()->query(
             'SELECT id, name FROM organisations WHERE is_active = 1 ORDER BY name'
         )->fetchAll();

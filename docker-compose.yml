@@ -10,6 +10,10 @@ services:
       DB_NAME: ttpacursus
       DB_USER: ttpa
       DB_PASS: ttpa_secret
+      # Local mail goes to Mailpit (web UI: http://localhost:8025)
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      MAIL_FROM: noreply@ttpacursus.test
     depends_on:
       mysql:
         condition: service_healthy
@@ -43,6 +47,12 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+      - "1025:1025"
 
 volumes:
   mysql_data:
