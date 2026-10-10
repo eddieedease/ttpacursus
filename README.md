@@ -28,7 +28,9 @@ docker compose up -d   # PHP API :8080, MySQL :3306, phpMyAdmin :8082, Mailpit :
 npm start              # Angular dev server :4200, proxyt /api naar :8080
 ```
 
-- Dev-beheerder: `admin` / `ttpa2025`
+- Dev-beheerder: `admin` / `ttpa2026`
+- Test-trainer: `trainer1` / `trainer2026` (Sanne Bakker). Handmatig aangemaakt in de lokale database,
+  dus na `docker compose down -v` opnieuw aanmaken via Beheer → Gebruikers
 - Preview-wachtwoord (site in aanbouw): `goudvis`
 - Alle mail wordt lokaal opgevangen door Mailpit: http://localhost:8025
 - Schone database: `docker compose down -v && docker compose up -d`

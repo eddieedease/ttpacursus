@@ -53,6 +53,11 @@ Fill in:
 
 - the **database credentials** from step 2
 - a **username and password** for the first admin account (this is what you use to log in at `/admin`)
+- optionally **"Voorbeeldgegevens laden"** — fictitious organisations, course
+  dates (always in the future), registrations in every status and three
+  trainers, for demos. All addresses are `@example.com`, so nobody is mailed.
+  The trainers' password is shown **once** on the success screen. To start
+  clean later: empty the data tables in phpMyAdmin, or reinstall on a fresh database.
 - optionally the **mail settings** (sender address + SMTP). You can also fill
   these in later under Beheer → Instellingen. The SMTP details are in your
   hosting control panel, with the mailbox you want to send from.
@@ -103,13 +108,18 @@ Accounts are managed under Beheer → Gebruikers.
 
 ## E-mail
 
-Two mails are sent, both editable under Beheer → E-mails:
+Three mails are sent, all editable under Beheer → E-mails:
 
 1. **Aanmelding ontvangen** — automatically, when the form is submitted.
 2. **Inschrijving bevestigd** — when the admin clicks "Bevestigen & mailen" on a
    registration (or "Bevestig alle ingedeelden" on a course date). The
    registration then gets status *bevestigd*. Moving a confirmed registration
    to another date sets it back to *ingedeeld*, so it needs a new confirmation.
+3. **Trainer ingepland** — to each trainer, when the admin clicks "Bevestig
+   ingeplande trainers & mail" on a course date (Cursusdata). Several trainers
+   can be scheduled per date; ticking a trainer is a draft until confirmed, and
+   trainers only see a date as scheduled on `/trainer` after confirmation.
+   Trainers need an e-mail address (Beheer → Gebruikers).
 
 Every mail is logged (Beheer → E-mails, and per registration in its details).
 An optional BCC address under Instellingen receives a copy of every mail.
@@ -153,6 +163,6 @@ docker compose up -d   # PHP API :8080, MySQL :3306, phpMyAdmin :8082, Mailpit :
 npm start              # Angular dev server :4200, proxies /api to :8080
 ```
 
-- Dev admin: username `admin`, password `ttpa2025`
+- Dev admin: username `admin`, password `ttpa2026`
 - Mail is caught by Mailpit: http://localhost:8025 (nothing leaves your machine)
 - Fresh database (re-runs schema + seed): `docker compose down -v && docker compose up -d`

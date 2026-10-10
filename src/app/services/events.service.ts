@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { CourseEvent } from '../models';
+import { ConfirmResult, CourseEvent } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class EventsService {
@@ -21,6 +21,14 @@ export class EventsService {
 
   setTrainers(id: number, trainerIds: number[]): Promise<unknown> {
     return firstValueFrom(this.http.put('/api/events.php', { id, trainerIds }));
+  }
+
+  /** Confirm the scheduled (not yet confirmed) trainers of a date and mail them. */
+  async confirmTrainers(eventId: number): Promise<ConfirmResult[]> {
+    const res = await firstValueFrom(
+      this.http.post<{ results: ConfirmResult[] }>('/api/confirm-trainers.php', { eventId })
+    );
+    return res.results;
   }
 
   delete(id: number): Promise<unknown> {

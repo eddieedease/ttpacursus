@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MailLogEntry, MailPlaceholder, MailTemplate } from '../../models';
+import { MailLogEntry, MailTemplate } from '../../models';
 import { MailService } from '../../services/mail.service';
 import { apiError } from '../../shared/api-error';
 
@@ -30,9 +30,9 @@ import { apiError } from '../../shared/api-error';
 
         <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <h3 class="text-sm font-semibold text-slate-800 mb-2">Beschikbare velden</h3>
-          <p class="text-xs text-slate-600 mb-3">Klik om in te voegen op de plek van de cursor in de tekst.</p>
+          <p class="text-xs text-slate-600 mb-3">Voor het gekozen sjabloon. Klik om in te voegen op de plek van de cursor.</p>
           <ul class="space-y-1.5 list-none p-0 m-0">
-            @for (ph of placeholders(); track ph.key) {
+            @for (ph of selected()?.placeholders ?? []; track ph.key) {
               <li>
                 <button type="button" class="font-mono text-xs bg-slate-100 hover:bg-teal-100 text-slate-800 px-1.5 py-0.5 rounded"
                         (click)="insert(ph.key)">{{ token(ph.key) }}</button>
@@ -135,7 +135,6 @@ export class AdminMailsComponent {
   private readonly mailService = inject(MailService);
 
   readonly templates = signal<MailTemplate[]>([]);
-  readonly placeholders = signal<MailPlaceholder[]>([]);
   readonly log = signal<MailLogEntry[]>([]);
   readonly selectedKey = signal<string | null>(null);
   readonly loading = signal(true);
@@ -162,9 +161,8 @@ export class AdminMailsComponent {
 
   private async load(): Promise<void> {
     try {
-      const [{ templates, placeholders }, log] = await Promise.all([this.mailService.templates(), this.mailService.log()]);
+      const [templates, log] = await Promise.all([this.mailService.templates(), this.mailService.log()]);
       this.templates.set(templates);
-      this.placeholders.set(placeholders);
       this.log.set(log);
       if (!this.selectedKey() && templates.length) {
         this.select(templates[0]);

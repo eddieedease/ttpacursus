@@ -6,7 +6,8 @@ declare(strict_types=1);
  * Trainer availability for the logged-in trainer.
  *
  * GET → upcoming course dates (not cancelled) with the trainer's own
- *       availability and whether the admin assigned them.
+ *       availability and whether they are scheduled (assigned AND confirmed
+ *       by the admin; unconfirmed assignments are a draft the trainer does not see).
  * PUT { eventId, status: 'beschikbaar' | 'misschien' | 'niet' | null }
  */
 
@@ -30,7 +31,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
                     (et.user_id IS NOT NULL) AS assigned
              FROM events e
              LEFT JOIN trainer_availability a ON a.event_id = e.id AND a.user_id = ?
-             LEFT JOIN event_trainers et ON et.event_id = e.id AND et.user_id = ?
+             LEFT JOIN event_trainers et ON et.event_id = e.id AND et.user_id = ? AND et.confirmed_at IS NOT NULL
              WHERE e.event_date >= CURDATE() AND e.status <> 'geannuleerd'
              ORDER BY e.event_date"
         );

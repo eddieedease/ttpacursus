@@ -53,8 +53,10 @@ import { UsersService } from '../../services/users.service';
                 <li class="flex items-center justify-between gap-3 py-1.5">
                   <span class="text-slate-800 first-letter:uppercase">{{ d.eventDate | date:'EEE d MMM y' }}</span>
                   <span class="flex items-center gap-1.5">
-                    @if (d.assigned) {
-                      <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-600 text-white">ingepland</span>
+                    @if (d.assigned && d.confirmed) {
+                      <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-700 text-white">ingepland</span>
+                    } @else if (d.assigned) {
+                      <span class="text-xs font-semibold px-2 py-0.5 rounded-full border border-amber-500 text-amber-900 bg-amber-50">nog te bevestigen</span>
                     }
                     <span class="text-xs font-semibold px-2 py-0.5 rounded-full" [class]="availabilityClasses(d.availability)">
                       {{ d.availability ?? 'niet opgegeven' }}

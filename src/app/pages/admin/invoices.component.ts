@@ -6,6 +6,11 @@ import { EventsService } from '../../services/events.service';
 import { InvoicesService } from '../../services/invoices.service';
 import { OrganisationsService } from '../../services/organisations.service';
 import { RegistrationsService } from '../../services/registrations.service';
+import { PeriodToggleComponent } from '../../shared/period-toggle/period-toggle.component';
+import { Period, TODAY, inPeriod } from '../../shared/today';
+
+/** Participants that are billed: assigned to the date and not cancelled. */
+const BILLABLE = (reg: Registration) => reg.status === 'ingedeeld' || reg.status === 'bevestigd';
 
 interface BillableOrg {
   organisation: Organisation;
@@ -15,7 +20,7 @@ interface BillableOrg {
 @Component({
   selector: 'app-admin-invoices',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule],
+  imports: [CurrencyPipe, DatePipe, PeriodToggleComponent, ReactiveFormsModule],
   template: `
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -23,7 +28,7 @@ interface BillableOrg {
       <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 self-start">
         <h2 class="text-base font-semibold text-slate-800 mb-4">Nieuwe factuur</h2>
         <p class="text-xs text-slate-500 mb-4">
-          Per cursusdatum wordt per organisatie gefactureerd voor de <strong>ingedeelde</strong> deelnemers.
+          Per cursusdatum wordt per organisatie gefactureerd voor de <strong>ingedeelde en bevestigde</strong> deelnemers. Geannuleerde aanmeldingen tellen niet mee.
         </p>
 
         <form [formGroup]="form" (ngSubmit)="create()" novalidate class="space-y-4">
@@ -82,7 +87,8 @@ interface BillableOrg {
 
       <!-- List -->
       <div class="lg:col-span-2 self-start">
-        <div class="mb-3">
+        <div class="mb-3 flex flex-wrap items-center gap-3">
+          <app-period-toggle [(period)]="period" [upcomingCount]="upcomingCount()" [pastCount]="pastCount()" label="Facturen op cursusdatum" />
           <label for="inv-search" class="sr-only">Zoeken in facturen</label>
           <input
             id="inv-search"
@@ -202,7 +208,7 @@ export class AdminInvoicesComponent {
     }
     const counts = new Map<number, number>();
     for (const reg of this.registrations()) {
-      if (reg.assignedEventId === eventId && reg.status === 'ingedeeld' && reg.organisationId !== null) {
+      if (reg.assignedEventId === eventId && BILLABLE(reg) && reg.organisationId !== null) {
         counts.set(reg.organisationId, (counts.get(reg.organisationId) ?? 0) + 1);
       }
     }
@@ -218,16 +224,22 @@ export class AdminInvoicesComponent {
       return 0;
     }
     return this.registrations().filter(
-      reg => reg.assignedEventId === eventId && reg.status === 'ingedeeld' && reg.organisationId === null
+      reg => reg.assignedEventId === eventId && BILLABLE(reg) && reg.organisationId === null
     ).length;
   });
 
+  private readonly today = inject(TODAY);
+  readonly period = signal<Period>('komend');
+  readonly upcomingCount = computed(() => this.invoices().filter(inv => inPeriod(inv.eventDate, 'komend', this.today)).length);
+  readonly pastCount = computed(() => this.invoices().length - this.upcomingCount());
+
   readonly filtered = computed(() => {
     const term = this.search().toLowerCase();
+    const inRange = this.invoices().filter(inv => inPeriod(inv.eventDate, this.period(), this.today));
     if (!term) {
-      return this.invoices();
+      return inRange;
     }
-    return this.invoices().filter(inv =>
+    return inRange.filter(inv =>
       [inv.invoiceNumber, inv.orgName, inv.eventDate, inv.status, ...inv.participants]
         .some(value => value.toLowerCase().includes(term))
     );

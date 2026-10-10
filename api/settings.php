@@ -67,6 +67,10 @@ switch ($_SERVER['REQUEST_METHOD']) {
             }
             $values[$k] = $value;
         }
+        // Switching the mode back on locks out everyone who unlocked the preview before.
+        if (($values['construction_enabled'] ?? null) === '1' && setting('construction_enabled') !== '1') {
+            $values['preview_nonce'] = bin2hex(random_bytes(8));
+        }
         // Only overwrite the SMTP password when a new one is entered.
         if (isset($body['smtpPass']) && $body['smtpPass'] !== '') {
             $values['smtp_pass'] = (string) $body['smtpPass'];

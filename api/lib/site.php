@@ -9,7 +9,8 @@ require_once __DIR__ . '/settings.php';
 /**
  * "Under construction" mode: while enabled, the public site and its public
  * API endpoints are only available after entering the preview password.
- * Unlocking sets a signed cookie; changing the password invalidates it.
+ * Unlocking sets a signed cookie; changing the password, or switching the
+ * mode back on (new preview_nonce), invalidates every cookie handed out.
  * Logged-in admins and trainers always have access.
  */
 const PREVIEW_COOKIE = 'ttpa_preview';
@@ -21,7 +22,7 @@ function construction_enabled(): bool
 
 function preview_token(): string
 {
-    return hash_hmac('sha256', setting('construction_password'), setting('app_secret'));
+    return hash_hmac('sha256', setting('construction_password') . '|' . setting('preview_nonce'), setting('app_secret'));
 }
 
 function site_unlocked(): bool

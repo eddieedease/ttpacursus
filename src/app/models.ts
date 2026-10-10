@@ -26,6 +26,8 @@ export interface EventTrainer {
   name: string;
   availability: Availability | null;
   assigned: boolean;
+  /** Assignment confirmed by the admin (trainer mailed). */
+  confirmed: boolean;
 }
 
 /** A course date as seen by the logged-in trainer. */
@@ -53,6 +55,7 @@ export interface TrainerOverview {
     location: string | null;
     availability: Availability | null;
     assigned: boolean;
+    confirmed: boolean;
   }[];
 }
 
@@ -88,6 +91,7 @@ export interface MailTemplate {
   subject: string;
   body: string;
   updatedAt: string;
+  placeholders: MailPlaceholder[];
 }
 
 export interface MailPlaceholder {

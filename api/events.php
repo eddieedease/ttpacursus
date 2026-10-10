@@ -32,7 +32,8 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $trainers = db()->query(
                 "SELECT e.id AS eventId, u.id AS userId, COALESCE(u.name, u.username) AS name,
                         a.status AS availability,
-                        (et.user_id IS NOT NULL) AS assigned
+                        (et.user_id IS NOT NULL) AS assigned,
+                        (et.confirmed_at IS NOT NULL) AS confirmed
                  FROM events e
                  CROSS JOIN users u
                  LEFT JOIN trainer_availability a ON a.event_id = e.id AND a.user_id = u.id
@@ -47,6 +48,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
                     'name' => $t['name'],
                     'availability' => $t['availability'],
                     'assigned' => (bool) $t['assigned'],
+                    'confirmed' => (bool) $t['confirmed'],
                 ];
             }
             foreach ($rows as &$row) {
@@ -161,9 +163,12 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $stmt->execute($params);
         }
         if ($trainerIds !== null) {
-            $pdo->prepare('DELETE FROM event_trainers WHERE event_id = ?')->execute([$id]);
+            // Remove trainers no longer in the set; keep existing rows (and their confirmation).
+            $placeholders = implode(',', array_fill(0, count($trainerIds), '?')) ?: 'NULL';
+            $pdo->prepare("DELETE FROM event_trainers WHERE event_id = ? AND user_id NOT IN ($placeholders)")
+                ->execute([$id, ...$trainerIds]);
             $insert = $pdo->prepare(
-                "INSERT INTO event_trainers (event_id, user_id)
+                "INSERT IGNORE INTO event_trainers (event_id, user_id)
                  SELECT ?, id FROM users WHERE id = ? AND role = 'trainer'"
             );
             foreach ($trainerIds as $trainerId) {

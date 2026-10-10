@@ -20,6 +20,10 @@ type Message = { ok: boolean; text: string } | null;
           Zolang dit aan staat zien bezoekers een "binnenkort online"-pagina en kunnen ze de site alleen bekijken
           met het preview-wachtwoord. Het beheer (/admin) en de trainerspagina (/trainer) blijven altijd bereikbaar.
         </p>
+        <p class="text-sm text-slate-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-5">
+          Ingelogd als beheerder ziet u de site altijd. Controleer het slot in een <strong>privévenster</strong>.
+          Bij het opnieuw aanzetten moet iedereen het preview-wachtwoord opnieuw invoeren.
+        </p>
         <form [formGroup]="construction" (ngSubmit)="saveConstruction()" novalidate class="space-y-4">
           <label class="flex items-center gap-3 cursor-pointer">
             <input type="checkbox" formControlName="constructionEnabled" class="h-5 w-5 rounded border-slate-400 text-teal-600 focus:ring-teal-500">

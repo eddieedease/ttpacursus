@@ -146,6 +146,17 @@ const DEFAULT_MAIL_TEMPLATES = [
             . "Wij zien u graag op de cursus.\n\n"
             . "Met vriendelijke groet,\n\nTTPA cursus",
     ],
+    'trainer_ingepland' => [
+        'subject' => 'U bent ingepland als trainer op {{cursusdatum}}',
+        'body' => "Beste {{naam}},\n\n"
+            . "Hierbij bevestigen wij dat u bent ingepland als trainer voor de TTPA cursus.\n\n"
+            . "Datum: {{cursusdatum}}\n"
+            . "Tijd: {{tijd}}\n"
+            . "Locatie: {{locatie}}\n"
+            . "Collega-trainer(s): {{collega_trainers}}\n\n"
+            . "Uw planning en beschikbaarheid vindt u op {{trainer_pagina}}\n\n"
+            . "Met vriendelijke groet,\n\nTTPA cursus",
+    ],
 ];
 
 function table_exists(PDO $pdo, string $table): bool
@@ -263,7 +274,7 @@ function migrations(): array
             }
 
             $stmt = $pdo->prepare('INSERT IGNORE INTO mail_templates (tpl_key, subject, body) VALUES (?, ?, ?)');
-            foreach (DEFAULT_MAIL_TEMPLATES as $key => $tpl) {
+            foreach (array_intersect_key(DEFAULT_MAIL_TEMPLATES, array_flip(['aanmelding_ontvangen', 'inschrijving_bevestigd'])) as $key => $tpl) {
                 $stmt->execute([$key, $tpl['subject'], $tpl['body']]);
             }
 
@@ -288,6 +299,16 @@ function migrations(): array
             foreach ($defaults as $k => $v) {
                 $stmt->execute([$k, $v]);
             }
+        },
+
+        // 3: trainer assignments are confirmed by the admin (with a mail to the trainer).
+        3 => function (PDO $pdo): void {
+            if (!column_exists($pdo, 'event_trainers', 'confirmed_at')) {
+                $pdo->exec('ALTER TABLE event_trainers ADD COLUMN confirmed_at DATETIME NULL AFTER user_id');
+            }
+            $tpl = DEFAULT_MAIL_TEMPLATES['trainer_ingepland'];
+            $pdo->prepare('INSERT IGNORE INTO mail_templates (tpl_key, subject, body) VALUES (?, ?, ?)')
+                ->execute(['trainer_ingepland', $tpl['subject'], $tpl['body']]);
         },
     ];
 }

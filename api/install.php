@@ -19,6 +19,7 @@ function esc(string $value): string
 }
 
 require __DIR__ . '/lib/schema.php';
+require __DIR__ . '/lib/demo.php';
 
 $config = require __DIR__ . '/config.php';
 
@@ -44,6 +45,7 @@ try {
 $errors = [];
 $done = false;
 $configWriteFailed = false;
+$demo = null;
 
 if (!$installed && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $dbHost = trim((string) ($_POST['db_host'] ?? ''));
@@ -112,6 +114,10 @@ if (!$installed && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$adminUser, password_hash($adminPass, PASSWORD_DEFAULT)]);
             }
 
+            if (!empty($_POST['demo_data'])) {
+                $demo = load_demo_data($pdo);
+            }
+
             if ($mail['mail_from_address'] !== '') {
                 $stmt = $pdo->prepare('REPLACE INTO settings (k, v) VALUES (?, ?)');
                 foreach ($mail as $k => $v) {
@@ -152,6 +158,8 @@ $prefill = [
   p.sub { color: #64748b; font-size: 0.875rem; margin-top: 0; }
   h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.4rem; margin: 1.5rem 0 0.75rem; }
   label { display: block; font-size: 0.875rem; font-weight: 500; margin: 0.75rem 0 0.25rem; }
+  label.check { display: flex; gap: 0.6rem; align-items: flex-start; font-weight: 400; line-height: 1.4; }
+  label.check input { width: auto; margin-top: 0.2rem; }
   p.hint { color: #64748b; font-size: 0.8rem; margin: 0 0 0.5rem; }
   select { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 0.9rem; background: #fff; }
   input { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 0.9rem; }
@@ -185,6 +193,16 @@ $prefill = [
     De database is aangemaakt en het beheerdersaccount staat klaar.
     U kunt nu <a href="../admin">inloggen op het beheer</a>.
   </div>
+  <?php if ($demo): ?>
+    <div class="ok">
+      <strong>Demodata geladen</strong>: organisaties, vier cursusdata, twaalf aanmeldingen en drie trainers.
+      Trainers loggen in op <a href="../trainer">/trainer</a> met gebruikersnaam
+      <?= implode(', ', array_map(fn(string $u): string => '<code>' . esc($u) . '</code>', $demo['trainers'])) ?>
+      en wachtwoord <code><?= esc($demo['password']) ?></code>.
+      <br><strong>Noteer dit wachtwoord nu</strong>; het wordt niet nog eens getoond
+      (u kunt het later wijzigen via Beheer → Gebruikers).
+    </div>
+  <?php endif; ?>
   <div class="warn">
     De site staat <strong>in aanbouw</strong>: bezoekers zien een wachtwoordpagina
     (wachtwoord <code>goudvis</code>). Zet dit uit via Beheer → Instellingen zodra de site live gaat.
@@ -248,6 +266,13 @@ $prefill = [
     <input id="smtp_user" name="smtp_user" value="<?= esc((string) ($_POST['smtp_user'] ?? '')) ?>" autocomplete="off">
     <label for="smtp_pass">SMTP-wachtwoord</label>
     <input id="smtp_pass" name="smtp_pass" type="password" autocomplete="new-password">
+
+    <h2>Demo</h2>
+    <label class="check">
+      <input type="checkbox" name="demo_data" value="1" <?= !empty($_POST['demo_data']) ? 'checked' : '' ?>>
+      Voorbeeldgegevens laden: fictieve organisaties, cursusdata, aanmeldingen en trainers om de site te kunnen laten zien.
+      Alle e-mailadressen eindigen op <code>@example.com</code>, er wordt dus niemand echt gemaild.
+    </label>
 
     <button type="submit">Installeren</button>
   </form>

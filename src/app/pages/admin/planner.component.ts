@@ -5,11 +5,13 @@ import { CourseEvent, EventTrainer } from '../../models';
 import { EventsService } from '../../services/events.service';
 import { RegistrationsService } from '../../services/registrations.service';
 import { apiError } from '../../shared/api-error';
+import { PeriodToggleComponent } from '../../shared/period-toggle/period-toggle.component';
+import { Period, TODAY, inPeriod } from '../../shared/today';
 
 @Component({
   selector: 'app-admin-planner',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, ReactiveFormsModule],
+  imports: [DatePipe, PeriodToggleComponent, ReactiveFormsModule],
   template: `
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -91,7 +93,8 @@ import { apiError } from '../../shared/api-error';
 
       <!-- List -->
       <div class="lg:col-span-2 self-start">
-        <div class="mb-3">
+        <div class="mb-3 flex flex-wrap items-center gap-3">
+          <app-period-toggle [(period)]="period" [upcomingCount]="upcomingCount()" [pastCount]="pastCount()" label="Cursusdata" />
           <label for="ev-search" class="sr-only">Zoeken in cursusdata</label>
           <input
             id="ev-search"
@@ -170,15 +173,34 @@ import { apiError } from '../../shared/api-error';
                                 class="h-4 w-4 rounded border-slate-400 text-teal-600 focus:ring-teal-500"
                                 [checked]="t.assigned"
                                 [disabled]="busyId() === ev.id"
-                                (change)="toggleTrainer(ev, t)"
+                                (change)="toggleTrainer(ev, t, $event)"
                               >
-                              <span class="text-sm text-slate-800 flex-1">{{ t.name }}</span>
+                              <span class="text-sm text-slate-800 flex-1">
+                                {{ t.name }}
+                                @if (t.assigned) {
+                                  <span class="ml-1 text-xs font-semibold" [class]="t.confirmed ? 'text-teal-800' : 'text-amber-800'">
+                                    {{ t.confirmed ? '✓ bevestigd' : '• nog te bevestigen' }}
+                                  </span>
+                                }
+                              </span>
                               <span class="text-xs font-semibold px-2 py-0.5 rounded-full" [class]="availabilityClasses(t)">
                                 {{ t.availability ?? 'niet opgegeven' }}
                               </span>
                             </label>
                           } @empty {
                             <p class="text-sm text-slate-600">Er zijn nog geen trainers. Voeg ze toe onder Gebruikers.</p>
+                          }
+                          @if (unconfirmedTrainers(ev) > 0) {
+                            <button
+                              type="button"
+                              class="mt-3 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 px-4 py-2 rounded-lg"
+                              [disabled]="busyId() === ev.id"
+                              (click)="confirmTrainers(ev)"
+                            >Bevestig ingeplande trainers &amp; mail ({{ unconfirmedTrainers(ev) }})</button>
+                            <p class="text-xs text-slate-600 mt-2">Trainers zien de datum pas als ingepland na bevestiging.</p>
+                          }
+                          @if (trainerMsg(); as m) {
+                            <p class="mt-3 text-sm" [class]="m.ok ? 'text-teal-800' : 'text-red-700'" role="status">{{ m.text }}</p>
                           }
                         </fieldset>
                         <div>
@@ -244,15 +266,26 @@ export class AdminPlannerComponent {
   readonly openId = signal<number | null>(null);
   readonly busyId = signal<number | null>(null);
   readonly confirmMsg = signal<{ ok: boolean; text: string } | null>(null);
+  readonly trainerMsg = signal<{ ok: boolean; text: string } | null>(null);
 
   private readonly search = signal('');
 
+  private readonly today = inject(TODAY);
+  readonly period = signal<Period>('komend');
+  readonly upcomingCount = computed(() => this.events().filter(ev => inPeriod(ev.eventDate, 'komend', this.today)).length);
+  readonly pastCount = computed(() => this.events().length - this.upcomingCount());
+
   readonly filtered = computed(() => {
     const term = this.search().toLowerCase();
-    if (!term) {
-      return this.events();
+    // Past dates: most recent first.
+    const inRange = this.events().filter(ev => inPeriod(ev.eventDate, this.period(), this.today));
+    if (this.period() === 'verleden') {
+      inRange.reverse();
     }
-    return this.events().filter(ev =>
+    if (!term) {
+      return inRange;
+    }
+    return inRange.filter(ev =>
       [ev.eventDate, ev.location ?? '', ev.notes ?? '', ev.status ?? '']
         .some(value => value.toLowerCase().includes(term))
     );
@@ -303,6 +336,33 @@ export class AdminPlannerComponent {
   toggle(id: number): void {
     this.openId.update(open => (open === id ? null : id));
     this.confirmMsg.set(null);
+    this.trainerMsg.set(null);
+  }
+
+  unconfirmedTrainers(ev: CourseEvent): number {
+    return (ev.trainers ?? []).filter(t => t.assigned && !t.confirmed).length;
+  }
+
+  async confirmTrainers(ev: CourseEvent): Promise<void> {
+    const count = this.unconfirmedTrainers(ev);
+    if (!confirm(`${count} trainer(s) bevestigen en de mail "Trainer ingepland" versturen?`)) {
+      return;
+    }
+    this.busyId.set(ev.id);
+    try {
+      const results = await this.eventsService.confirmTrainers(ev.id);
+      const failed = results.filter(r => !r.ok);
+      this.trainerMsg.set(
+        failed.length
+          ? { ok: false, text: `${results.length - failed.length} bevestigd, ${failed.length} mislukt: ${failed.map(f => f.error).join('; ')}` }
+          : { ok: true, text: `${results.length} trainer(s) bevestigd en gemaild.` }
+      );
+      await this.load();
+    } catch (e) {
+      this.trainerMsg.set({ ok: false, text: apiError(e, 'Bevestigen is mislukt.') });
+    } finally {
+      this.busyId.set(null);
+    }
   }
 
   assignedTrainers(ev: CourseEvent): string[] {
@@ -322,7 +382,14 @@ export class AdminPlannerComponent {
     }
   }
 
-  async toggleTrainer(ev: CourseEvent, trainer: EventTrainer): Promise<void> {
+  async toggleTrainer(ev: CourseEvent, trainer: EventTrainer, event: Event): Promise<void> {
+    if (
+      trainer.confirmed &&
+      !confirm(`${trainer.name} is al bevestigd en gemaild voor deze datum. Toch uitplannen? De trainer krijgt hier geen bericht over; laat het zelf even weten.`)
+    ) {
+      (event.target as HTMLInputElement).checked = true;
+      return;
+    }
     const ids = (ev.trainers ?? [])
       .filter(t => (t.userId === trainer.userId ? !t.assigned : t.assigned))
       .map(t => t.userId);

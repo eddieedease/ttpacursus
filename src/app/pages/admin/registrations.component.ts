@@ -7,17 +7,26 @@ import { OrganisationsService } from '../../services/organisations.service';
 import { RegistrationsService } from '../../services/registrations.service';
 import { RegistrationEditComponent } from './registration-edit.component';
 import { apiError } from '../../shared/api-error';
+import { PeriodToggleComponent } from '../../shared/period-toggle/period-toggle.component';
+import { Period, TODAY, inPeriod } from '../../shared/today';
 
 @Component({
   selector: 'app-admin-registrations',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RegistrationEditComponent],
+  imports: [DatePipe, PeriodToggleComponent, RegistrationEditComponent],
   template: `
+    <div class="mb-4">
+      <app-period-toggle [(period)]="period" [upcomingCount]="upcomingCount()" [pastCount]="pastCount()" label="Aanmeldingen per cursusdatum" />
+      <p class="mt-2 text-xs text-slate-600">
+        Ingedeeld op (of, als nog niet ingedeeld, voorkeur voor) een datum vanaf vandaag valt onder Komend.
+      </p>
+    </div>
+
     <!-- Stats -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
         <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Totaal aanmeldingen</p>
-        <p class="text-3xl font-bold text-slate-900">{{ registrations().length }}</p>
+        <p class="text-3xl font-bold text-slate-900">{{ periodRegistrations().length }}</p>
       </div>
       <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
         <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">Nog in te delen</p>
@@ -59,7 +68,7 @@ import { apiError } from '../../shared/api-error';
         <label for="filter-event" class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Ingedeeld op datum</label>
         <select id="filter-event" class="form-input" (change)="onEventFilter($event)">
           <option value="">Alle</option>
-          @for (ev of events(); track ev.id) {
+          @for (ev of periodEvents(); track ev.id) {
             <option [value]="ev.id">{{ ev.eventDate | date:'d MMM y' }}</option>
           }
         </select>
@@ -106,7 +115,7 @@ import { apiError } from '../../shared/api-error';
                     (change)="assign(reg, $event)"
                   >
                     <option value="" [selected]="reg.assignedEventId === null">— Niet ingedeeld —</option>
-                    @for (ev of events(); track ev.id) {
+                    @for (ev of assignableEvents(reg); track ev.id) {
                       <option [value]="ev.id" [selected]="ev.id === reg.assignedEventId">
                         {{ ev.eventDate | date:'d MMM y' }} ({{ ev.assignedCount }}/{{ ev.capacity }})
                       </option>
@@ -306,11 +315,34 @@ export class AdminRegistrationsComponent {
   private readonly eventFilter = signal<number | null>(null);
   private readonly search = signal('');
 
+  private readonly today = inject(TODAY);
+  readonly period = signal<Period>('komend');
+
+  /** The date a registration belongs to: the assigned date, else the preferred one. */
+  private courseDate(reg: Registration): string | null {
+    return reg.assignedEventDate ?? reg.preferredEventDate;
+  }
+
+  readonly periodRegistrations = computed(() =>
+    this.registrations().filter(reg => inPeriod(this.courseDate(reg), this.period(), this.today))
+  );
+  readonly upcomingCount = computed(() =>
+    this.registrations().filter(reg => inPeriod(this.courseDate(reg), 'komend', this.today)).length
+  );
+  readonly pastCount = computed(() => this.registrations().length - this.upcomingCount());
+  readonly periodEvents = computed(() => this.events().filter(ev => inPeriod(ev.eventDate, this.period(), this.today)));
+
+  /** Dates offered for assigning: upcoming ones, plus the current assignment if that is in the past. */
+  assignableEvents(reg: Registration): CourseEvent[] {
+    return this.events().filter(ev => inPeriod(ev.eventDate, 'komend', this.today) || ev.id === reg.assignedEventId);
+  }
+
   readonly filtered = computed(() => {
     const status = this.statusFilter();
-    const eventId = this.eventFilter();
+    // A date filter from the other period no longer applies (its option is gone).
+    const eventId = this.periodEvents().some(ev => ev.id === this.eventFilter()) ? this.eventFilter() : null;
     const term = this.search().toLowerCase();
-    return this.registrations().filter(reg =>
+    return this.periodRegistrations().filter(reg =>
       (status === '' || reg.status === status) &&
       (eventId === null || reg.assignedEventId === eventId) &&
       (term === '' ||
@@ -322,9 +354,9 @@ export class AdminRegistrationsComponent {
     );
   });
 
-  readonly newCount = computed(() => this.registrations().filter(r => r.status === 'nieuw').length);
-  readonly assignedCount = computed(() => this.registrations().filter(r => r.status === 'ingedeeld').length);
-  readonly confirmedCount = computed(() => this.registrations().filter(r => r.status === 'bevestigd').length);
+  readonly newCount = computed(() => this.periodRegistrations().filter(r => r.status === 'nieuw').length);
+  readonly assignedCount = computed(() => this.periodRegistrations().filter(r => r.status === 'ingedeeld').length);
+  readonly confirmedCount = computed(() => this.periodRegistrations().filter(r => r.status === 'bevestigd').length);
 
   constructor() {
     this.load();

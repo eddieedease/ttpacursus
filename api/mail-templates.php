@@ -18,20 +18,34 @@ const TEMPLATE_INFO = [
         'name' => 'Inschrijving bevestigd',
         'description' => 'Wordt verstuurd wanneer de beheerder een aanmelding bevestigt (knop "Bevestigen & mailen").',
     ],
+    'trainer_ingepland' => [
+        'name' => 'Trainer ingepland',
+        'description' => 'Wordt naar de trainer verstuurd wanneer de beheerder de ingeplande trainers van een cursusdatum bevestigt.',
+    ],
 ];
+
+function placeholder_list(array $placeholders): array
+{
+    $out = [];
+    foreach ($placeholders as $key => $label) {
+        $out[] = ['key' => $key, 'label' => $label];
+    }
+
+    return $out;
+}
 
 switch ($_SERVER['REQUEST_METHOD']) {
     case 'GET':
-        $rows = db()->query('SELECT tpl_key AS `key`, subject, body, updated_at AS updatedAt FROM mail_templates')->fetchAll();
+        $rows = db()->query('SELECT tpl_key AS `key`, subject, body, updated_at AS updatedAt FROM mail_templates ORDER BY FIELD(tpl_key, \'aanmelding_ontvangen\', \'inschrijving_bevestigd\', \'trainer_ingepland\')')->fetchAll();
         $templates = [];
         foreach ($rows as $row) {
-            $templates[] = array_merge($row, TEMPLATE_INFO[$row['key']] ?? ['name' => $row['key'], 'description' => '']);
+            $templates[] = array_merge(
+                $row,
+                TEMPLATE_INFO[$row['key']] ?? ['name' => $row['key'], 'description' => ''],
+                ['placeholders' => placeholder_list($row['key'] === 'trainer_ingepland' ? TRAINER_MAIL_PLACEHOLDERS : MAIL_PLACEHOLDERS)]
+            );
         }
-        $placeholders = [];
-        foreach (MAIL_PLACEHOLDERS as $key => $label) {
-            $placeholders[] = ['key' => $key, 'label' => $label];
-        }
-        json_response(['templates' => $templates, 'placeholders' => $placeholders]);
+        json_response(['templates' => $templates]);
 
     case 'PUT':
         $body = read_json();

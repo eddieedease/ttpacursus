@@ -9,7 +9,16 @@ require_once __DIR__ . '/PHPMailer/SMTP.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 
-/** Placeholders available in mail templates, with a description for the admin UI. */
+/** Placeholders per mail template, with a description for the admin UI. */
+const TRAINER_MAIL_PLACEHOLDERS = [
+    'naam' => 'Naam van de trainer',
+    'cursusdatum' => 'Cursusdatum',
+    'tijd' => 'Tijd van de cursus',
+    'locatie' => 'Locatie van de cursus',
+    'collega_trainers' => 'Andere ingeplande trainers op deze datum',
+    'trainer_pagina' => 'Link naar de trainerspagina',
+];
+
 const MAIL_PLACEHOLDERS = [
     'voornaam' => 'Voornaam',
     'achternaam' => 'Achternaam (incl. voorvoegsels)',
@@ -79,10 +88,52 @@ function registration_mail_vars(int $registrationId, array $extra = []): array
     ], $extra);
 }
 
+/** Placeholder values for a trainer scheduled on a course date. */
+function trainer_mail_vars(int $eventId, int $userId): array
+{
+    $stmt = db()->prepare('SELECT event_date, start_time, end_time, location FROM events WHERE id = ?');
+    $stmt->execute([$eventId]);
+    $event = $stmt->fetch();
+    $stmt = db()->prepare('SELECT COALESCE(name, username) AS name, email FROM users WHERE id = ?');
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch();
+    if (!$event || !$user) {
+        throw new RuntimeException('Cursusdatum of trainer niet gevonden');
+    }
+    $stmt = db()->prepare(
+        'SELECT COALESCE(u.name, u.username) FROM event_trainers et JOIN users u ON u.id = et.user_id
+         WHERE et.event_id = ? AND et.user_id <> ? ORDER BY 1'
+    );
+    $stmt->execute([$eventId, $userId]);
+    $colleagues = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    return [
+        'email' => (string) $user['email'],
+        'naam' => $user['name'],
+        'cursusdatum' => dutch_date($event['event_date']),
+        'tijd' => time_range($event['start_time'], $event['end_time']),
+        'locatie' => $event['location'] ?? '',
+        'collega_trainers' => $colleagues ? implode(', ', $colleagues) : 'geen',
+        'trainer_pagina' => site_url('/trainer'),
+    ];
+}
+
+/** Absolute URL on this site (the API lives in /api below the site root). */
+function site_url(string $path): string
+{
+    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $host = $_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $base = rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '/api/x.php')), '/');
+
+    return ($https ? 'https' : 'http') . '://' . $host . $base . $path;
+}
+
 /** Example values, used for test mails from the admin. */
 function sample_mail_vars(): array
 {
     return [
+        'collega_trainers' => 'Pieter de Groot',
+        'trainer_pagina' => site_url('/trainer'),
         'voornaam' => 'Anna',
         'achternaam' => 'Jansen',
         'naam' => 'Dr. A. Jansen',

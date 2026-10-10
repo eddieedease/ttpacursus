@@ -1,16 +1,15 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { MailLogEntry, MailPlaceholder, MailTemplate } from '../models';
+import { MailLogEntry, MailTemplate } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class MailService {
   private readonly http = inject(HttpClient);
 
-  templates(): Promise<{ templates: MailTemplate[]; placeholders: MailPlaceholder[] }> {
-    return firstValueFrom(
-      this.http.get<{ templates: MailTemplate[]; placeholders: MailPlaceholder[] }>('/api/mail-templates.php')
-    );
+  async templates(): Promise<MailTemplate[]> {
+    const res = await firstValueFrom(this.http.get<{ templates: MailTemplate[] }>('/api/mail-templates.php'));
+    return res.templates;
   }
 
   saveTemplate(key: string, subject: string, body: string): Promise<unknown> {

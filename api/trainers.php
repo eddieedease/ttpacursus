@@ -25,7 +25,7 @@ $trainers = db()->query(
 // Every upcoming, non-cancelled date × trainer, with availability and assignment.
 $rows = db()->query(
     "SELECT u.id AS userId, e.id AS eventId, e.event_date AS eventDate, e.location,
-            a.status AS availability, (et.user_id IS NOT NULL) AS assigned
+            a.status AS availability, (et.user_id IS NOT NULL) AS assigned, (et.confirmed_at IS NOT NULL) AS confirmed
      FROM users u
      CROSS JOIN events e
      LEFT JOIN trainer_availability a ON a.user_id = u.id AND a.event_id = e.id
@@ -42,6 +42,7 @@ foreach ($rows as $row) {
         'location' => $row['location'],
         'availability' => $row['availability'],
         'assigned' => (bool) $row['assigned'],
+        'confirmed' => (bool) $row['confirmed'],
     ];
 }
 

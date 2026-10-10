@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
+import { NgOptimizedImage } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SiteService } from '../../services/site.service';
@@ -6,13 +7,15 @@ import { SiteService } from '../../services/site.service';
 @Component({
   selector: 'app-construction',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule],
+  imports: [NgOptimizedImage, ReactiveFormsModule],
   template: `
-    <section class="min-h-full bg-gradient-to-br from-slate-900 to-teal-900 flex items-center justify-center px-4 py-20">
-      <div class="max-w-md w-full text-center">
+    <section class="relative overflow-hidden min-h-[calc(100dvh-4rem)] bg-slate-900 flex items-center justify-center px-4 py-20">
+      <img ngSrc="images/simulatie.jpg" fill priority alt="" class="object-cover">
+      <div class="absolute inset-0 bg-gradient-to-br from-slate-950/90 via-slate-900/85 to-teal-950/80" aria-hidden="true"></div>
+      <div class="relative max-w-md w-full text-center">
         <p class="text-teal-300 font-black text-4xl tracking-tight mb-2">TTPA</p>
         <h1 class="text-2xl sm:text-3xl font-bold text-white mb-3">Binnenkort online</h1>
-        <p class="text-slate-300 mb-10">
+        <p class="text-slate-200 mb-10">
           De website voor de TTPA cursus (Tips, Tricks and Pitfall Avoidance) wordt op dit moment voorbereid.
         </p>
 
